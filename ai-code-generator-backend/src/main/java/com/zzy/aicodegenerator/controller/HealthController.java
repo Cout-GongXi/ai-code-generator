@@ -5,7 +5,9 @@ import com.zzy.aicodegenerator.common.ResultUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
+/**
+ * 健康检查控制器，提供一个接口用于检查服务是否正常运行
+ */
 @RestController
 @RequestMapping("/health")
 public class HealthController {
