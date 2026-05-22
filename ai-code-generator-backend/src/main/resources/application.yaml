@@ -3,11 +3,15 @@ spring:
     name: ai-code-generator-backend
   profiles:
     active: local
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ai_code_generator
+    username: root
+    password: 123456
 server:
   port: 8001
   servlet:
     context-path: /api
-
 # springdoc-openapi项目配置
 springdoc:
   group-configs:
@@ -19,3 +23,18 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+
+# langchain4j配置
+
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: https://api.deepseek.com/
+      api-key:
+      model-name: deepseek-v4-flash
+      log-requests: true
+      log-responses: true
+      max-tokens: 8192
+      strict-json-schema: true
+      response-format: json_object
+

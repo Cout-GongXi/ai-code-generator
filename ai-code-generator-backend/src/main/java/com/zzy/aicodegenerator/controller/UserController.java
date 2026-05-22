@@ -38,7 +38,7 @@ public class UserController {
      * @param userRegisterRequest 用户注册请求体
      * @return 注册结果
      */
-    @PostMapping("register")
+    @PostMapping("/register")
     public BaseResponse<Long> register(@RequestBody UserRegisterRequest userRegisterRequest) {
         ThrowUtils.throwIf(userRegisterRequest == null, ErrorCode.PARAMS_ERROR);
         String userAccount = userRegisterRequest.getUserAccount();
@@ -55,8 +55,8 @@ public class UserController {
      * @param request          HTTP 请求
      * @return 脱敏后的用户信息
      */
-    @PostMapping("login")
-    public BaseResponse<LoginUserVO> login(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
+    @PostMapping("/login")
+    public BaseResponse<LoginUserVO> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(userLoginRequest == null, ErrorCode.PARAMS_ERROR);
         String userAccount = userLoginRequest.getUserAccount();
         String userPassword = userLoginRequest.getUserPassword();
@@ -70,8 +70,8 @@ public class UserController {
      * @param request HTTP 请求
      * @return 注销结果
      */
-    @PostMapping("logout")
-    public BaseResponse<Boolean> logout(HttpServletRequest request) {
+    @PostMapping("/logout")
+    public BaseResponse<Boolean> userLogout(HttpServletRequest request) {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR);
         boolean result = userService.userLogout(request);
         return ResultUtils.success(result);
@@ -95,7 +95,7 @@ public class UserController {
      * @param userAddRequest 用户添加请求体
      * @return 新用户 id
      */
-    @PostMapping("add")
+    @PostMapping("/add")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Long> addUser(@RequestBody UserAddRequest userAddRequest) {
         ThrowUtils.throwIf(userAddRequest == null, ErrorCode.PARAMS_ERROR);
@@ -132,7 +132,7 @@ public class UserController {
      * @param id 用户表主键
      * @return 用户表详情（脱敏）
      */
-    @GetMapping("get/vo")
+    @GetMapping("/get/vo")
     public BaseResponse<UserVO> getUserVOById(Long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR, "用户 id 错误");
         User user = userService.getById(id);
@@ -147,10 +147,10 @@ public class UserController {
      * @param deleteRequest 删除请求体，包含用户表主键
      * @return 删除结果
      */
-    @PostMapping("delete")
+    @PostMapping("/delete")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Boolean> deleteUserById(@RequestBody DeleteRequest deleteRequest) {
-        ThrowUtils.throwIf(deleteRequest == null, ErrorCode.PARAMS_ERROR, "请求参数错误");
+    public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest) {
+        ThrowUtils.throwIf(deleteRequest == null || deleteRequest.getId() <= 0, ErrorCode.PARAMS_ERROR, "请求参数错误");
         boolean result = userService.removeById(deleteRequest.getId());
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "用户删除失败");
         return ResultUtils.success(true);
@@ -161,7 +161,7 @@ public class UserController {
      * @param userUpdateRequest 用户更新请求体，包含用户表主键和要更新的字段
      * @return 更新结果
      */
-    @PostMapping("update")
+    @PostMapping("/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> updateUser(@RequestBody UserUpdateRequest userUpdateRequest) {
         ThrowUtils.throwIf(userUpdateRequest == null || userUpdateRequest.getId() == null,

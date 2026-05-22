@@ -11,7 +11,7 @@ public class ResultUtils {
      * @return 成功的BaseResponse对象
      */
     public static <T> BaseResponse<T> success(T data) {
-        return new BaseResponse<>(200, data, "success");
+        return new BaseResponse<>(0, data, "success");
     }
 
     /**
