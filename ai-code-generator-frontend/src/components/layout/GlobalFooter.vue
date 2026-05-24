@@ -6,7 +6,7 @@
 </template>
 
 <script setup lang="ts">
-const BLOG_URL = 'https://blog.zhenzy.asia'
+const BLOG_URL = 'https://zhenzy.asia'
 </script>
 
 <style scoped>

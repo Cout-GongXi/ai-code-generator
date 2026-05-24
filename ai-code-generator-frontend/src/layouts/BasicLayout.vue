@@ -42,11 +42,15 @@ const { Header, Content, Footer } = Layout
 
 .basic-layout-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   width: 100%;
   max-width: 1280px;
   margin: 0 auto;
   padding: 24px 16px;
   background: #f5f5f5;
+  box-sizing: border-box;
 }
 
 .basic-layout-footer {
