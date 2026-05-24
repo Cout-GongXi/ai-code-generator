@@ -3,6 +3,8 @@ package com.zzy.aicodegenerator.model.dto.app;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * 应用更新请求（管理员，支持修改应用名称、封面、优先级）
@@ -29,6 +31,7 @@ public class AppUpdateByAdminRequest implements Serializable {
      * 应用优先级
      */
     private Integer priority;
+
 
     private static final long serialVersionUID = 1L;
 }

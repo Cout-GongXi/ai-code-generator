@@ -37,6 +37,16 @@ public class AppVO implements Serializable {
     private String codeGenType;
 
     /**
+     * 应用部署标识
+     */
+    private String deployKey;
+
+    /**
+     * 应用部署时间
+     */
+    private LocalDateTime deployTime;
+
+    /**
      * 应用优先级
      */
     private Integer priority;
@@ -55,6 +65,11 @@ public class AppVO implements Serializable {
      * 更新时间
      */
     private LocalDateTime updateTime;
+
+    /**
+     * 创建者信息
+     */
+    private UserVO user;
 
     private static final long serialVersionUID = 1L;
 }

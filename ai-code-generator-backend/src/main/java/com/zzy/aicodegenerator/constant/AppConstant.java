@@ -7,9 +7,14 @@ package com.zzy.aicodegenerator.constant;
  */
 public interface AppConstant {
     /**
-     * 默认代码生成类型
+     * 精选应用的优先级
      */
-    String DEFAULT_CODE_GEN_TYPE = "default";
+    Integer Featured_APP_PRIORITY = 100;
+
+    /**
+     * 默认应用优先级
+     */
+    Integer DEFAULT_APP_PRIORITY = 0;
 
     /**
      * 用户查询每页最大数量

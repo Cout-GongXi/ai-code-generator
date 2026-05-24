@@ -2,6 +2,7 @@ package com.zzy.aicodegenerator.controller;
 
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.paginate.Page;
+import com.mybatisflex.core.query.QueryWrapper;
 import com.zzy.aicodegenerator.annotation.AuthCheck;
 import com.zzy.aicodegenerator.common.BaseResponse;
 import com.zzy.aicodegenerator.common.DeleteRequest;
@@ -10,12 +11,10 @@ import com.zzy.aicodegenerator.constant.AppConstant;
 import com.zzy.aicodegenerator.constant.UserConstant;
 import com.zzy.aicodegenerator.exception.ErrorCode;
 import com.zzy.aicodegenerator.exception.ThrowUtils;
-import com.zzy.aicodegenerator.model.dto.app.AppCreateRequest;
-import com.zzy.aicodegenerator.model.dto.app.AppQueryRequest;
-import com.zzy.aicodegenerator.model.dto.app.AppUpdateByAdminRequest;
-import com.zzy.aicodegenerator.model.dto.app.AppUpdateRequest;
+import com.zzy.aicodegenerator.model.dto.app.*;
 import com.zzy.aicodegenerator.model.entity.App;
 import com.zzy.aicodegenerator.model.entity.User;
+import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
 import com.zzy.aicodegenerator.model.vo.AppVO;
 import com.zzy.aicodegenerator.service.AppService;
 import com.zzy.aicodegenerator.service.UserService;
@@ -24,6 +23,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -46,27 +46,33 @@ public class AppController {
     /**
      * 创建应用（须填写 initPrompt）。
      *
-     * @param appCreateRequest 应用创建请求体
-     * @param request          HTTP 请求
+     * @param addAddRequest 应用创建请求体
+     * @param request       HTTP 请求
      * @return 新应用 id
      */
-    @PostMapping("/create")
-    public BaseResponse<Long> createApp(@RequestBody AppCreateRequest appCreateRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(appCreateRequest == null, ErrorCode.PARAMS_ERROR);
-        String appName = appCreateRequest.getAppName();
-        String initPrompt = appCreateRequest.getInitPrompt();
+    @PostMapping("/add")
+    public BaseResponse<Long> addApp(@RequestBody AppAddRequest addAddRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(addAddRequest == null, ErrorCode.PARAMS_ERROR);
+        // 参数校验
+        String initPrompt = addAddRequest.getInitPrompt();
         ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "initPrompt 不能为空");
+        // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
+        // 构造入库对象
         App app = new App();
-        BeanUtils.copyProperties(appCreateRequest, app);
+        BeanUtils.copyProperties(addAddRequest, app);
+        // 设置用户id
         app.setUserId(loginUser.getId());
-        if (StrUtil.isBlank(app.getCodeGenType())) {
-            app.setCodeGenType(AppConstant.DEFAULT_CODE_GEN_TYPE);
-        }
+        // 应用名称默认设置为initPrompt的前12位
+        app.setAppName(StrUtil.sub(initPrompt, 0, 12));
+        // 暂时设置为多文件生成
+        app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
+        // 插入数据库
         boolean result = appService.save(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用创建失败");
         return ResultUtils.success(app.getId());
     }
+
 
     /**
      * 根据 id 修改自己的应用（目前只支持修改应用名称）。
@@ -77,17 +83,19 @@ public class AppController {
      */
     @PostMapping("/update")
     public BaseResponse<Boolean> updateApp(@RequestBody AppUpdateRequest appUpdateRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(appUpdateRequest == null || appUpdateRequest.getId() == null,
-                ErrorCode.PARAMS_ERROR, "请求参数错误");
+        ThrowUtils.throwIf(appUpdateRequest == null || appUpdateRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(request);
-        App existApp = appService.getById(appUpdateRequest.getId());
-        ThrowUtils.throwIf(existApp == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
-        ThrowUtils.throwIf(!existApp.getUserId().equals(loginUser.getId()),
-                ErrorCode.NO_AUTH_ERROR, "无权修改该应用");
-        App updateApp = new App();
-        updateApp.setId(appUpdateRequest.getId());
-        updateApp.setAppName(appUpdateRequest.getAppName());
-        boolean result = appService.updateById(updateApp);
+        long id = loginUser.getId();
+        App oldApp = appService.getById(appUpdateRequest.getId());
+        ThrowUtils.throwIf(oldApp == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        // 校验权限
+        ThrowUtils.throwIf(!oldApp.getUserId().equals(loginUser.getId()), ErrorCode.NO_AUTH_ERROR, "无权修改该应用");
+        // 构造更新对象
+        App app = new App();
+        app.setId(appUpdateRequest.getId());
+        app.setAppName(appUpdateRequest.getAppName());
+        app.setEditTime(LocalDateTime.now());
+        boolean result = appService.updateById(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用更新失败");
         return ResultUtils.success(true);
     }
@@ -116,18 +124,17 @@ public class AppController {
     /**
      * 根据 id 查看应用详情（脱敏）。
      *
-     * @param id      应用 id
-     * @param request HTTP 请求
+     * @param id 应用 id
      * @return 应用详情
      */
     @GetMapping("/get/vo")
-    public BaseResponse<AppVO> getAppVOById(Long id, HttpServletRequest request) {
+    public BaseResponse<AppVO> getAppVOById(Long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR, "应用 id 错误");
-        User loginUser = userService.getLoginUser(request);
+        // 获取应用
         App app = appService.getById(id);
+        // 应用不存在
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
-        ThrowUtils.throwIf(!app.getUserId().equals(loginUser.getId()),
-                ErrorCode.NO_AUTH_ERROR, "无权查看该应用");
+        // 获取应用详情
         return ResultUtils.success(appService.getAppVO(app));
     }
 
@@ -138,17 +145,22 @@ public class AppController {
      * @param request         HTTP 请求
      * @return 应用分页列表（脱敏）
      */
-    @PostMapping("/list/page/vo")
+    @PostMapping("/list/user/page/vo")
     public BaseResponse<Page<AppVO>> listUserAppsVOByPage(@RequestBody AppQueryRequest appQueryRequest,
                                                           HttpServletRequest request) {
-        ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR, "请求参数错误");
+        ThrowUtils.throwIf(appQueryRequest == null,
+                ErrorCode.PARAMS_ERROR, "请求参数错误");
         User loginUser = userService.getLoginUser(request);
-        int pageNum = appQueryRequest.getPageNum();
-        int pageSize = Math.min(appQueryRequest.getPageSize(), AppConstant.MAX_PAGE_SIZE);
+        int pageSize = appQueryRequest.getPageSize();
+        long pageNum = appQueryRequest.getPageNum();
+        // 限制每页最多 20 条数据
+        ThrowUtils.throwIf(pageSize > AppConstant.MAX_PAGE_SIZE,
+                ErrorCode.PARAMS_ERROR, "每页最多查询 20 个应用");
+        ThrowUtils.throwIf(pageNum <= 0, ErrorCode.PARAMS_ERROR, "页码错误");
+        // 只查询当前用户的应用
         appQueryRequest.setUserId(loginUser.getId());
-        appQueryRequest.setIsDelete(0);
-        Page<App> appPage = appService.page(new Page<>(pageNum, pageSize),
-                appService.getQueryWrapper(appQueryRequest));
+        QueryWrapper queryWrapper = appService.getQueryWrapper(appQueryRequest);
+        Page<App> appPage = appService.page(Page.of(pageNum, pageSize), queryWrapper);
         Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
         List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords());
         appVOPage.setRecords(appVOList);
@@ -162,16 +174,18 @@ public class AppController {
      * @param appQueryRequest 应用查询请求体
      * @return 应用分页列表（脱敏）
      */
-    @PostMapping("/list/featured/vo")
+    @PostMapping("/list/featured/page/vo")
     public BaseResponse<Page<AppVO>> listFeaturedAppsVOByPage(@RequestBody AppQueryRequest appQueryRequest) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR, "请求参数错误");
-        int pageNum = appQueryRequest.getPageNum();
-        int pageSize = Math.min(appQueryRequest.getPageSize(), AppConstant.MAX_PAGE_SIZE);
-        appQueryRequest.setIsDelete(0);
-        appQueryRequest.setSortField("priority");
-        appQueryRequest.setSortOrder("descend");
-        Page<App> appPage = appService.page(new Page<>(pageNum, pageSize),
-                appService.getQueryWrapper(appQueryRequest));
+        int pageSize = appQueryRequest.getPageSize();
+        long pageNum = appQueryRequest.getPageNum();
+        // 限制每页最多 20 条数据
+        ThrowUtils.throwIf(pageSize > AppConstant.MAX_PAGE_SIZE,
+                ErrorCode.PARAMS_ERROR, "每页最多查询 20 个应用");
+        ThrowUtils.throwIf(pageNum <= 0, ErrorCode.PARAMS_ERROR, "页码错误");
+        appQueryRequest.setPriority(AppConstant.Featured_APP_PRIORITY);
+        QueryWrapper queryWrapper = appService.getQueryWrapper(appQueryRequest);
+        Page<App> appPage = appService.page(Page.of(pageNum, pageSize), queryWrapper);
         Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
         List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords());
         appVOPage.setRecords(appVOList);
@@ -191,7 +205,10 @@ public class AppController {
     public BaseResponse<Boolean> deleteAppByAdmin(@RequestBody DeleteRequest deleteRequest) {
         ThrowUtils.throwIf(deleteRequest == null || deleteRequest.getId() <= 0,
                 ErrorCode.PARAMS_ERROR, "请求参数错误");
-        boolean result = appService.removeById(deleteRequest.getId());
+        Long id = deleteRequest.getId();
+        App existApp = appService.getById(id);
+        ThrowUtils.throwIf(existApp == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        boolean result = appService.removeById(id);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用删除失败");
         return ResultUtils.success(true);
     }
@@ -207,8 +224,13 @@ public class AppController {
     public BaseResponse<Boolean> updateAppByAdmin(@RequestBody AppUpdateByAdminRequest appUpdateByAdminRequest) {
         ThrowUtils.throwIf(appUpdateByAdminRequest == null || appUpdateByAdminRequest.getId() == null,
                 ErrorCode.PARAMS_ERROR, "请求参数错误");
+        // 判断应用是否存在
+        App existApp = appService.getById(appUpdateByAdminRequest.getId());
+        ThrowUtils.throwIf(existApp == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
         App app = new App();
         BeanUtils.copyProperties(appUpdateByAdminRequest, app);
+        // 设置编辑时间
+        app.setEditTime(LocalDateTime.now());
         boolean result = appService.updateById(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用更新失败");
         return ResultUtils.success(true);
@@ -220,15 +242,21 @@ public class AppController {
      * @param appQueryRequest 应用查询请求体
      * @return 应用分页列表
      */
-    @PostMapping("/admin/list/page")
+    @PostMapping("/admin/list/page/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Page<App>> listAppsByPage(@RequestBody AppQueryRequest appQueryRequest) {
+    public BaseResponse<Page<AppVO>> listAppByPageByAdmin(@RequestBody AppQueryRequest appQueryRequest) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR, "请求参数错误");
         int pageNum = appQueryRequest.getPageNum();
+        ThrowUtils.throwIf(pageNum <= 0, ErrorCode.PARAMS_ERROR, "页码错误");
         int pageSize = appQueryRequest.getPageSize();
-        Page<App> appPage = appService.page(new Page<>(pageNum, pageSize),
-                appService.getQueryWrapper(appQueryRequest));
-        return ResultUtils.success(appPage);
+
+        QueryWrapper queryWrapper = appService.getQueryWrapper(appQueryRequest);
+        Page<App> appPage = appService.page(Page.of(pageNum, pageSize), queryWrapper);
+        // 数据封装
+        Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
+        List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords());
+        appVOPage.setRecords(appVOList);
+        return ResultUtils.success(appVOPage);
     }
 
     /**
@@ -237,12 +265,12 @@ public class AppController {
      * @param id 应用 id
      * @return 应用详情
      */
-    @GetMapping("/admin/get")
+    @GetMapping("/admin/get/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<App> getAppById(Long id) {
+    public BaseResponse<AppVO> getAppVOByIdByAdmin(Long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR, "应用 id 错误");
         App app = appService.getById(id);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
-        return ResultUtils.success(app);
+        return ResultUtils.success(appService.getAppVO(app));
     }
 }

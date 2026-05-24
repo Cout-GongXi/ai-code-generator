@@ -6,10 +6,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 @MapperScan("com.zzy.aicodegenerator.mapper")
-public class AiCodeGeneratorBackendApplication {
+public class AiCodeGeneratorApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(AiCodeGeneratorBackendApplication.class, args);
+        SpringApplication.run(AiCodeGeneratorApplication.class, args);
     }
 
 }
