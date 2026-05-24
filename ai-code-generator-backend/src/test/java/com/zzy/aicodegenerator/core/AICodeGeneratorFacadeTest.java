@@ -24,7 +24,7 @@ class AICodeGeneratorFacadeTest {
 
     @Test
     void generateAndSaveCodeSteam() {
-        String userMessage = "请生成一个简单的博客页面，要求代码不超过100行";
+        String userMessage = "请生成一个简单的博客页面，要求代码不超过200行";
         Flux<String> stringFlux = aiCodeGeneratorFacade.generateAndSaveCodeSteam(userMessage, CodeGenTypeEnum.MULTI_FILE);
         // 阻塞等待所有数据收集完成
         List<String> result = stringFlux.collectList().block();

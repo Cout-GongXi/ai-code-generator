@@ -12,7 +12,7 @@ import java.util.Map;
 public class MybatisCodeGenerator {
 
     // 可以在这里设置要生成哪些表，或者在全局配置中设置 setGenerateTable，未设置时生成所有表
-    private static final String[] TABLE_NAMES = {"user"};
+    private static final String[] TABLE_NAMES = {"app"};
 
     public static void main(String[] args) {
         // 从配置文件中读取配置项，或者直接在代码中设置配置项

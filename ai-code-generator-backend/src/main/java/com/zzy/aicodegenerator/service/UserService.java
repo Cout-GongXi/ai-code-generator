@@ -2,7 +2,7 @@ package com.zzy.aicodegenerator.service;
 
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
-import com.zzy.aicodegenerator.model.dto.UserQueryRequest;
+import com.zzy.aicodegenerator.model.dto.user.UserQueryRequest;
 import com.zzy.aicodegenerator.model.entity.User;
 import com.zzy.aicodegenerator.model.vo.LoginUserVO;
 import com.zzy.aicodegenerator.model.vo.UserVO;

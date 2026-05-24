@@ -7,7 +7,7 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.zzy.aicodegenerator.exception.BusinessException;
 import com.zzy.aicodegenerator.exception.ErrorCode;
 import com.zzy.aicodegenerator.mapper.UserMapper;
-import com.zzy.aicodegenerator.model.dto.UserQueryRequest;
+import com.zzy.aicodegenerator.model.dto.user.UserQueryRequest;
 import com.zzy.aicodegenerator.model.entity.User;
 import com.zzy.aicodegenerator.model.enums.UserRoleEnum;
 import com.zzy.aicodegenerator.model.vo.LoginUserVO;

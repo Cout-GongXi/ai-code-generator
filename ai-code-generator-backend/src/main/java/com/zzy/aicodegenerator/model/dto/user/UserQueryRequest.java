@@ -1,4 +1,4 @@
-package com.zzy.aicodegenerator.model.dto;
+package com.zzy.aicodegenerator.model.dto.user;
 
 import com.zzy.aicodegenerator.common.PageRequest;
 import lombok.Data;

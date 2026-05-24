@@ -8,7 +8,7 @@ import com.zzy.aicodegenerator.common.ResultUtils;
 import com.zzy.aicodegenerator.constant.UserConstant;
 import com.zzy.aicodegenerator.exception.ErrorCode;
 import com.zzy.aicodegenerator.exception.ThrowUtils;
-import com.zzy.aicodegenerator.model.dto.*;
+import com.zzy.aicodegenerator.model.dto.user.*;
 import com.zzy.aicodegenerator.model.entity.User;
 import com.zzy.aicodegenerator.model.vo.LoginUserVO;
 import com.zzy.aicodegenerator.model.vo.UserVO;
