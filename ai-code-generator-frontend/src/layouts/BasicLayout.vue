@@ -1,72 +1,45 @@
+<template>
+  <a-layout class="basic-layout">
+    <!-- 顶部导航栏 -->
+    <GlobalHeader v-if="!isStandalonePage" />
+    <!-- 主要内容区域 -->
+    <a-layout-content
+      class="main-content"
+      :class="{ 'standalone-content': isStandalonePage }"
+    >
+      <router-view />
+    </a-layout-content>
+    <!-- 底部版权信息 -->
+    <GlobalFooter v-if="!isStandalonePage" />
+  </a-layout>
+</template>
+
 <script setup lang="ts">
-import { Layout } from 'ant-design-vue'
 import GlobalHeader from '@/components/layout/GlobalHeader.vue'
 import GlobalFooter from '@/components/layout/GlobalFooter.vue'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 
-const { Header, Content, Footer } = Layout
+const route = useRoute()
+const isStandalonePage = computed(() => route.meta.standalone === true)
 </script>
-
-<template>
-  <Layout class="basic-layout">
-    <Header class="basic-layout-header">
-      <GlobalHeader />
-    </Header>
-
-    <Content class="basic-layout-content">
-      <RouterView />
-    </Content>
-
-    <Footer class="basic-layout-footer">
-      <GlobalFooter />
-    </Footer>
-  </Layout>
-</template>
 
 <style scoped>
 .basic-layout {
+  background: none;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
-.basic-layout-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  padding: 0;
-  height: 64px;
-  line-height: 64px;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-
-.basic-layout-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+.main-content {
   width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px 16px;
-  background: #f5f5f5;
-  box-sizing: border-box;
+  padding: 0;
+  background: none;
+  margin: 0;
+  position: relative;
+  z-index: 1;
 }
 
-.basic-layout-footer {
-  flex-shrink: 0;
-  padding: 16px 24px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
-}
-
-@media (max-width: 768px) {
-  .basic-layout-content {
-    padding: 16px 12px;
-  }
-
-  .basic-layout-footer {
-    padding: 12px 16px;
-  }
+.standalone-content {
+  min-height: 100vh;
 }
 </style>
