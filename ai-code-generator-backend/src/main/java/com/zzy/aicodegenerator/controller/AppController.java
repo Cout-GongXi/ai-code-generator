@@ -287,7 +287,7 @@ public class AppController {
      */
     @PostMapping("/admin/list/page/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Page<AppVO>> listAppByPageByAdmin(@RequestBody AppQueryRequest appQueryRequest) {
+    public BaseResponse<Page<AppVO>> listAppVOByPageByAdmin(@RequestBody AppQueryRequest appQueryRequest) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR, "请求参数错误");
         int pageNum = appQueryRequest.getPageNum();
         ThrowUtils.throwIf(pageNum <= 0, ErrorCode.PARAMS_ERROR, "页码错误");
