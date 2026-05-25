@@ -12,13 +12,20 @@ const BLOG_URL = 'https://zhenzy.asia'
 <style scoped>
 .global-footer {
   text-align: center;
-  color: rgba(0, 0, 0, 0.65);
+  padding: 18px 24px 24px;
+  background: rgba(248, 251, 255, 0.92);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.04);
   font-size: 14px;
+  color: #64748b;
+  letter-spacing: 0.02em;
 }
 
 .global-footer a {
-  color: #1677ff;
+  color: #2563eb;
   text-decoration: none;
+  font-weight: 600;
 }
 
 .global-footer a:hover {
