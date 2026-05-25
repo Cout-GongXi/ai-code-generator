@@ -1,6 +1,7 @@
 package com.zzy.aicodegenerator.controller;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.zzy.aicodegenerator.annotation.AuthCheck;
@@ -18,13 +19,19 @@ import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
 import com.zzy.aicodegenerator.model.vo.AppVO;
 import com.zzy.aicodegenerator.service.AppService;
 import com.zzy.aicodegenerator.service.UserService;
+
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.BeanUtils;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 应用 控制层。
@@ -41,7 +48,43 @@ public class AppController {
     @Resource
     private UserService userService;
 
-    // ==================== 用户接口 ====================
+    @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId, @RequestParam String message, HttpServletRequest request) {
+        // 参数校验
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "appId 错误");
+        ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "对话内容不能为空");
+        User loginUser = userService.getLoginUser(request);
+        // 调用服务生成代码 流式返回
+        Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser);
+        return contentFlux.map(chunk -> {
+                    Map<String, String> wrapper = Map.of("d", chunk);
+                    String jsonData = JSONUtil.toJsonStr(wrapper);
+                    return ServerSentEvent.<String>builder()
+                            .data(jsonData)
+                            .build();
+                })
+                .concatWith(Mono.just(
+                        //发送一个结束事件
+                        ServerSentEvent.<String>builder().event("done").data("").build()
+                ));
+    }
+
+    @PostMapping("/deploy")
+    public BaseResponse<String> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
+        // 参数校验
+        ThrowUtils.throwIf(appDeployRequest == null, ErrorCode.PARAMS_ERROR);
+        // 获取应用id
+        Long appId = appDeployRequest.getAppId();
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "appId 错误");
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        // 调用服务部署应用
+        String deployUrl = appService.deployApp(appId, loginUser);
+        // 返回URL
+        return ResultUtils.success(deployUrl);
+
+    }
+// ==================== 用户接口 ====================
 
     /**
      * 创建应用（须填写 initPrompt）。
@@ -192,7 +235,7 @@ public class AppController {
         return ResultUtils.success(appVOPage);
     }
 
-    // ==================== 管理员接口 ====================
+// ==================== 管理员接口 ====================
 
     /**
      * 根据 id 删除任意应用。管理员可用

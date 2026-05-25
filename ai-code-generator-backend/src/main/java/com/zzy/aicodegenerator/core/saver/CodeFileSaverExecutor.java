@@ -1,6 +1,5 @@
 package com.zzy.aicodegenerator.core.saver;
 
-import com.jfinal.template.stat.ast.Switch;
 import com.zzy.aicodegenerator.ai.model.HtmlCodeResult;
 import com.zzy.aicodegenerator.ai.model.MultiFileCodeResult;
 import com.zzy.aicodegenerator.exception.BusinessException;
@@ -20,12 +19,13 @@ public class CodeFileSaverExecutor {
      *
      * @param codeResult 代码结果
      * @param codeGenType 代码生成类型
+     * @param appId  应用 ID
      * @return 文件目录对象
      */
-    public static File executeSaver(Object codeResult, CodeGenTypeEnum codeGenType) {
+    public static File executeSaver(Object codeResult, CodeGenTypeEnum codeGenType, Long appId) {
         return switch (codeGenType) {
-            case HTML -> htmlCodeFileSaverTemplate.saveCode((HtmlCodeResult) codeResult);
-            case MULTI_FILE -> multiFileCodeFileSaverTemplate.saveCode((MultiFileCodeResult) codeResult);
+            case HTML -> htmlCodeFileSaverTemplate.saveCode((HtmlCodeResult) codeResult, appId);
+            case MULTI_FILE -> multiFileCodeFileSaverTemplate.saveCode((MultiFileCodeResult) codeResult, appId);
             default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
         };
     }

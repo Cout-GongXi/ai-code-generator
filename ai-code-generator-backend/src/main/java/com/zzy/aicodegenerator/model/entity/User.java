@@ -94,7 +94,7 @@ public class User implements Serializable {
     /**
      * 是否删除: 0-未删除 1-已删除
      */
-    @Column("isDelete")
+    @Column(value = "isDelete", isLogicDelete = true)
     private Integer isDelete;
 
 }
