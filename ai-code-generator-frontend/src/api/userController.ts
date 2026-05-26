@@ -17,6 +17,21 @@ export async function addUser(
   })
 }
 
+/** 此处后端没有提供注释 POST /user/admin/update */
+export async function updateUserByAdmin(
+  body: API.UserUpdateByAdminRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/admin/update', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 POST /user/delete */
 export async function deleteUser(
   body: API.DeleteRequest,
@@ -124,7 +139,7 @@ export async function userRegister(
 }
 
 /** 此处后端没有提供注释 POST /user/update */
-export async function updateUser(
+export async function updateUserVo(
   body: API.UserUpdateRequest,
   options?: { [key: string]: any }
 ) {
