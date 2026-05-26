@@ -41,12 +41,10 @@ interface Props {
   app: API.AppVO
   featured?: boolean
 }
-
 interface Emits {
   (e: 'view-chat', appId: string | number | undefined): void
   (e: 'view-work', app: API.AppVO): void
 }
-
 const props = withDefaults(defineProps<Props>(), {
   featured: false,
 })

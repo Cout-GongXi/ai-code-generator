@@ -32,7 +32,7 @@ const isStandalonePage = computed(() => route.meta.standalone === true)
 
 .main-content {
   width: 100%;
-  padding: 0;
+  padding: 64px 0 0;
   background: none;
   margin: 0;
   position: relative;
@@ -41,5 +41,6 @@ const isStandalonePage = computed(() => route.meta.standalone === true)
 
 .standalone-content {
   min-height: 100vh;
+  padding-top: 0;
 }
 </style>

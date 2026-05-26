@@ -240,7 +240,7 @@ onMounted(() => {
       </div>
 
       <!-- 我的作品 -->
-      <div class="section">
+      <div v-if="loginUserStore.loginUser.id" class="section">
         <h2 class="section-title">我的作品</h2>
         <div class="app-grid">
           <AppCard
@@ -296,6 +296,8 @@ onMounted(() => {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
+  margin-top: -64px;
+  padding-top: 64px;
   background:
     radial-gradient(circle at top, rgba(59, 130, 246, 0.14), transparent 38%),
     linear-gradient(180deg, #f8fbff 0%, #f4f7fb 42%, #eef3f8 100%);
