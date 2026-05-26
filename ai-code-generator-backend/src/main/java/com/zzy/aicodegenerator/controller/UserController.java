@@ -6,6 +6,7 @@ import com.zzy.aicodegenerator.common.BaseResponse;
 import com.zzy.aicodegenerator.common.DeleteRequest;
 import com.zzy.aicodegenerator.common.ResultUtils;
 import com.zzy.aicodegenerator.constant.UserConstant;
+import com.zzy.aicodegenerator.exception.BusinessException;
 import com.zzy.aicodegenerator.exception.ErrorCode;
 import com.zzy.aicodegenerator.exception.ThrowUtils;
 import com.zzy.aicodegenerator.model.dto.user.*;
@@ -155,19 +156,46 @@ public class UserController {
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "用户删除失败");
         return ResultUtils.success(true);
     }
+
     /**
-     * 根据主键更新用户表。管理员可用
+     * 根据主键更新用户表
      *
      * @param userUpdateRequest 用户更新请求体，包含用户表主键和要更新的字段
      * @return 更新结果
      */
     @PostMapping("/update")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Boolean> updateUser(@RequestBody UserUpdateRequest userUpdateRequest) {
-        ThrowUtils.throwIf(userUpdateRequest == null || userUpdateRequest.getId() == null,
+    public BaseResponse<Boolean> updateUserVO(@RequestBody UserUpdateRequest userUpdateRequest) {
+        ThrowUtils.throwIf(userUpdateRequest == null || userUpdateRequest.getId() <= 0,
                 ErrorCode.PARAMS_ERROR, "请求参数错误");
+        // 判断密码和确认密码是否一致
+        if (userUpdateRequest.getPassword() != null && userUpdateRequest.getConfirmPassword() != null) {
+            if (!userUpdateRequest.getPassword().equals(userUpdateRequest.getConfirmPassword())) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "两次输入的密码不一致");
+            }
+        }
         User user = new User();
         BeanUtils.copyProperties(userUpdateRequest, user);
+        // 密码加密
+        String encryptPassword = userService.getEncryptPassword(userUpdateRequest.getPassword());
+        user.setUserPassword(encryptPassword);
+        boolean result = userService.updateById(user);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "用户更新失败");
+        return ResultUtils.success(true);
+    }
+
+    /**
+     * 根据主键更新用户表。管理员可用
+     *
+     * @param updateByAdminRequest 用户更新请求体，包含用户表主键和要更新的字段
+     * @return 更新结果
+     */
+    @PostMapping("/admin/update")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> updateUserByAdmin(@RequestBody UserUpdateByAdminRequest updateByAdminRequest) {
+        ThrowUtils.throwIf(updateByAdminRequest == null || updateByAdminRequest.getId() <= 0,
+                ErrorCode.PARAMS_ERROR, "请求参数错误");
+        User user = new User();
+        BeanUtils.copyProperties(updateByAdminRequest, user);
         boolean result = userService.updateById(user);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "用户更新失败");
         return ResultUtils.success(true);

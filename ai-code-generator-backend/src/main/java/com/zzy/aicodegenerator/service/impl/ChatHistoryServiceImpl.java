@@ -58,7 +58,7 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     public boolean deleteByAppId(Long appId) {
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用Id不能为空");
         QueryWrapper queryWrapper = new QueryWrapper();
-        queryWrapper.eq("app_id", appId);
+        queryWrapper.eq("appId", appId);
         return this.remove(queryWrapper);
     }
 
