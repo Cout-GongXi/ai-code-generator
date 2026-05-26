@@ -17,6 +17,7 @@ import com.zzy.aicodegenerator.model.entity.App;
 import com.zzy.aicodegenerator.model.entity.User;
 import com.zzy.aicodegenerator.model.enums.ChatHistoryMessageTypeEnum;
 import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
+import com.zzy.aicodegenerator.model.enums.UserRoleEnum;
 import com.zzy.aicodegenerator.model.vo.AppVO;
 import com.zzy.aicodegenerator.model.vo.UserVO;
 import com.zzy.aicodegenerator.service.AppService;
@@ -104,8 +105,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 2. 获取应用信息
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
-        // 3. 权限校验，仅允许应用创建者可以部署自己的应用
-        if (!app.getUserId().equals(loginUser.getId())) {
+        // 3. 权限校验，仅允许应用创建者或管理员可以部署应用
+        if (!app.getUserId().equals(loginUser.getId()) || loginUser.getUserRole() == UserRoleEnum.ADMIN.getValue()) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限部署该应用");
         }
         // 4. 检查是否已有 deployKey
@@ -209,7 +210,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
      * @return 删除结果
      */
     @Override
-    public boolean removeById(@NonNull Serializable id) {
+    public boolean removeById( Serializable id) {
         long appId = Long.parseLong(id.toString());
 
         if (appId <= 0) {
