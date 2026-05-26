@@ -110,12 +110,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public User getLoginUser(HttpServletRequest request) {
         Long userId = (Long) request.getSession().getAttribute(USER_LOGIN_STATE);
         if (userId == null) {
-            throw new BusinessException(ErrorCode.NOT_LOGGED_IN, "用户未登录");
+            throw new BusinessException(ErrorCode.NOT_LOGIN_IN, "用户未登录");
         }
         // 从数据空中查询用户信息
         User currentUser = this.getById(userId);
         if (currentUser == null) {
-            throw new BusinessException(ErrorCode.NOT_LOGGED_IN, "用户未登录");
+            throw new BusinessException(ErrorCode.NOT_LOGIN_IN, "用户未登录");
         }
         return currentUser;
     }

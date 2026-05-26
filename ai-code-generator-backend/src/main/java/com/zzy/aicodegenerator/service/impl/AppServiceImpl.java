@@ -2,7 +2,6 @@ package com.zzy.aicodegenerator.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.io.IORuntimeException;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -16,19 +15,23 @@ import com.zzy.aicodegenerator.mapper.AppMapper;
 import com.zzy.aicodegenerator.model.dto.app.AppQueryRequest;
 import com.zzy.aicodegenerator.model.entity.App;
 import com.zzy.aicodegenerator.model.entity.User;
+import com.zzy.aicodegenerator.model.enums.ChatHistoryMessageTypeEnum;
 import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
 import com.zzy.aicodegenerator.model.vo.AppVO;
 import com.zzy.aicodegenerator.model.vo.UserVO;
 import com.zzy.aicodegenerator.service.AppService;
+import com.zzy.aicodegenerator.service.ChatHistoryService;
 import com.zzy.aicodegenerator.service.UserService;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
+import java.io.Serializable;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,11 +42,15 @@ import java.util.stream.Collectors;
  *
  * @author zzy
  */
+@Slf4j
 @Service
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private ChatHistoryService chatHistoryService;
 
     @Resource
     private AICodeGeneratorFacade aiCodeGeneratorFacade;
@@ -66,15 +73,34 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if (codeGenType == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成模式错误");
         }
-        // 5. 调用AI进行生成
-        return aiCodeGeneratorFacade.generateAndSaveCodeSteam(message, enumGenTypeEnum, appId);
+        // 5. 保存用户消息到数据库中
+        chatHistoryService.addChatMessage(appId, loginUser.getId(), message, ChatHistoryMessageTypeEnum.USER.getValue());
+
+        // 6. 调用 AI 进行生成
+        Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeSteam(message, enumGenTypeEnum, appId);
+
+        // 7. 收集 AI 生成的消息，保存到数据库中
+        StringBuilder aiResponseBuilder = new StringBuilder();
+        return contentFlux.map(chunk -> {
+            // 实时收集 AI 相应的内容
+            aiResponseBuilder.append(chunk);
+            return chunk;
+        }).doOnComplete(() -> {
+            // 流式返回完成后，保存 AI 消息到对话历史中
+            String aiResponse = aiResponseBuilder.toString();
+            chatHistoryService.addChatMessage(appId, loginUser.getId(), aiResponse, ChatHistoryMessageTypeEnum.AI.getValue());
+        }).doOnError(error -> {
+            // AI 回复失败，也保存记录到数据库中
+            String errorMessage = "AI 回复失败： " + error.getMessage();
+            chatHistoryService.addChatMessage(appId, loginUser.getId(), errorMessage, ChatHistoryMessageTypeEnum.AI.getValue());
+        });
     }
 
     @Override
     public String deployApp(Long appId, User loginUser) {
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用id错误");
-        ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGGED_IN, "未登录");
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_IN, "未登录");
         // 2. 获取应用信息
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
@@ -173,7 +199,30 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .eq("priority", priority)
                 .eq("userId", userId)
                 .orderBy(sortField, "ascend".equals(sortOrder));
+
     }
 
+    /**
+     * 删除应用时，关联删除对话历史
+     *
+     * @param id 数据主键
+     * @return 删除结果
+     */
+    @Override
+    public boolean removeById(@NonNull Serializable id) {
+        long appId = Long.parseLong(id.toString());
+
+        if (appId <= 0) {
+            return false;
+        }
+        // 删除应用历史
+        try {
+            chatHistoryService.deleteByAppId(appId);
+        } catch (Exception e) {
+            log.error("删除应用历史失败，appId: {}, error: {}", appId, e.getMessage());
+        }
+        // 删除应用
+        return super.removeById(id);
+    }
 
 }
