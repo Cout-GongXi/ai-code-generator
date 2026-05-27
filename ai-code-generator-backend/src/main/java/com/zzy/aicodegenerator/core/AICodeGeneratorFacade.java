@@ -1,6 +1,7 @@
 package com.zzy.aicodegenerator.core;
 
 import com.zzy.aicodegenerator.ai.AICodeGeneratorService;
+import com.zzy.aicodegenerator.ai.AICodeGeneratorServiceFactory;
 import com.zzy.aicodegenerator.ai.model.HtmlCodeResult;
 import com.zzy.aicodegenerator.ai.model.MultiFileCodeResult;
 import com.zzy.aicodegenerator.core.parser.CodeParserExecutor;
@@ -22,21 +23,22 @@ import java.io.File;
 @Service
 public class AICodeGeneratorFacade {
     @Resource
-    private AICodeGeneratorService aiCodeGeneratorService;
+    private AICodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
 
     /**
      * 统一入口，根据类型生成并保存代码
      *
      * @param userMessage     用户输入的消息
      * @param codeGenTypeEnum 代码生成类型枚举
-     * @param appId        应用ID
+     * @param appId           应用ID
      * @return 生成的代码字符串
      */
     public File generateAndSaveCode(String userMessage, CodeGenTypeEnum codeGenTypeEnum, Long appId) {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "代码生成类型不能为空");
         }
-
+        // 根据 AppId 获取对应的 AI 代码生成器服务
+        AICodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
         // 根据不同的代码生成类型调用不同的生成方法
         return switch (codeGenTypeEnum) {
             case HTML -> {
@@ -59,13 +61,15 @@ public class AICodeGeneratorFacade {
      *
      * @param userMessage     用户输入的消息
      * @param codeGenTypeEnum 代码生成类型枚举
-     * @param appId        应用ID
+     * @param appId           应用ID
      * @return 生成的代码字符串
      */
     public Flux<String> generateAndSaveCodeSteam(String userMessage, CodeGenTypeEnum codeGenTypeEnum, Long appId) {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "代码生成类型不能为空");
         }
+        // 根据 AppId 获取对应的 AI 代码生成器服务
+        AICodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
 
         // 根据不同的代码生成类型调用不同的生成方法
         return switch (codeGenTypeEnum) {
@@ -90,7 +94,7 @@ public class AICodeGeneratorFacade {
      *
      * @param codeStream  代码流
      * @param codeGenType 代码生成类型枚举
-     * @param appId        应用ID
+     * @param appId       应用ID
      * @return 流式响应
      */
     private Flux<String> processCodeStream(Flux<String> codeStream, CodeGenTypeEnum codeGenType, Long appId) {

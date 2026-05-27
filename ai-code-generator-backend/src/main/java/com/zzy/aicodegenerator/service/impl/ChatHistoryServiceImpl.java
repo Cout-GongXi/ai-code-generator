@@ -15,17 +15,23 @@ import com.zzy.aicodegenerator.model.entity.User;
 import com.zzy.aicodegenerator.model.enums.ChatHistoryMessageTypeEnum;
 import com.zzy.aicodegenerator.service.AppService;
 import com.zzy.aicodegenerator.service.ChatHistoryService;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 对话历史 服务层实现。
  *
  * @author zzy
  */
+@Slf4j
 @Service
 public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatHistory> implements ChatHistoryService {
 
@@ -83,6 +89,39 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         QueryWrapper queryWrapper = this.getQueryWrapper(queryRequest);
         // 查询数据
         return this.page(Page.of(1, pageSize), queryWrapper);
+    }
+    @Override
+    public int loadChatHistoryToMemory(Long appId, MessageWindowChatMemory chatMemory, int maxCount) {
+        try {
+            QueryWrapper queryWrapper = QueryWrapper.create()
+                    .eq(ChatHistory::getAppId, appId)
+                    .orderBy(ChatHistory::getCreateTime, false)
+                    .limit(1, maxCount);
+            List<ChatHistory> historyList = this.list(queryWrapper);
+            if (historyList.isEmpty()) {
+                return 0;
+            }
+            // 反转列表：确保按照时间正序（老在前，新在后）
+            historyList = historyList.reversed();
+            // 将历史记录添加到内存中
+            int loadedCount = 0;
+            // 先清理历史缓存，防止重复加载
+            chatMemory.clear();
+            for (ChatHistory history : historyList){
+               if (ChatHistoryMessageTypeEnum.USER.getValue().equals(history.getMessageType())){
+                   chatMemory.add(UserMessage.from(history.getMessage()));
+               }else if (ChatHistoryMessageTypeEnum.AI.getValue().equals(history.getMessageType())){
+                   chatMemory.add(AiMessage.from(history.getMessage()));
+               }
+               loadedCount++;
+            }
+            log.info("成功为 AppId：{} 加载了{}条历史记录到内存中",appId ,loadedCount);
+            return loadedCount;
+        } catch (Exception e) {
+            log.error("加载历史记录到内存失败，appId: {}, error: {}", appId, e.getMessage());
+            return 0;
+        }
+
     }
 
     @Override
