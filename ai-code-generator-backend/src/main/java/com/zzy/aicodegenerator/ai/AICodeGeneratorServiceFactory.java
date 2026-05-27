@@ -2,8 +2,11 @@ package com.zzy.aicodegenerator.ai;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.zzy.aicodegenerator.ai.tools.FileWriteTool;
+import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
 import com.zzy.aicodegenerator.service.ChatHistoryService;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -19,7 +22,7 @@ import java.time.Duration;
  * AI 服务创建工厂
  *
  * @author zzy
- * @date 2024/6/11
+ *
  */
 @Slf4j
 @Configuration
@@ -29,7 +32,10 @@ public class AICodeGeneratorServiceFactory {
     private ChatModel chatModel;
 
     @Resource
-    private StreamingChatModel streamingChatModel;
+    private StreamingChatModel openAiStreamingChatModel;
+
+    @Resource
+    private StreamingChatModel reasoningStreamingChatModel;
 
     @Resource
     private RedisChatMemoryStore redisChatMemoryStore;
@@ -40,12 +46,12 @@ public class AICodeGeneratorServiceFactory {
      * AI 服务缓存
      * 缓存策略：缓存 1000 个实例，每个实例缓存 30 分钟，每次访问 10 分钟后过期
      */
-    private final Cache<Long, AICodeGeneratorService> serviceCache = Caffeine.newBuilder()
+    private final Cache<String, AICodeGeneratorService> serviceCache = Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(Duration.ofMinutes(30))
             .expireAfterAccess(Duration.ofMinutes(10))
             .removalListener((key, value, cause) -> {
-                log.debug("AI 服务实例被移除： appId：{} ,原因：{}", key, cause);
+                log.debug("AI 服务实例被移除： 缓存键：{} ,原因：{}", key, cause);
             })
             .build();
 
@@ -66,7 +72,19 @@ public class AICodeGeneratorServiceFactory {
      * @return AICodeGeneratorService 实例
      */
     public AICodeGeneratorService getAiCodeGeneratorService(long appId) {
-        return serviceCache.get(appId, this::createAiCodeGeneratorService);
+
+        return getAiCodeGeneratorService(appId, CodeGenTypeEnum.HTML);
+    }
+
+    /**
+     * 根据 appId 获取 AI 代码生成器服务
+     *
+     * @param appId 应用 ID
+     * @return AICodeGeneratorService 实例
+     */
+    public AICodeGeneratorService getAiCodeGeneratorService(long appId, CodeGenTypeEnum codeGenType) {
+        String cacheKey = buildCacheKey(appId, codeGenType);
+        return serviceCache.get(cacheKey, key -> createAiCodeGeneratorService(appId, codeGenType));
     }
 
     /**
@@ -76,10 +94,11 @@ public class AICodeGeneratorServiceFactory {
      * 每个应用 ID 拥有独立的对话历史记忆，支持最多保留 20 条消息。
      * </p>
      *
-     * @param appId 应用唯一标识符，用于隔离不同应用的对话上下文
+     * @param appId       应用唯一标识符，用于隔离不同应用的对话上下文
+     * @param codeGenType 代码生成类型
      * @return AICodeGeneratorService 配置完成的 AI 代码生成器服务实例
      */
-    public AICodeGeneratorService createAiCodeGeneratorService(long appId) {
+    public AICodeGeneratorService createAiCodeGeneratorService(long appId, CodeGenTypeEnum codeGenType) {
         log.info("创建 AI 服务实例： appId：{}", appId);
 
         // 根据 appId 构建独立的应用对话记忆
@@ -91,10 +110,35 @@ public class AICodeGeneratorServiceFactory {
                 .build();
         // 从数据库中加载对话历史到记忆中
         chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
-        return AiServices.builder(AICodeGeneratorService.class)
-                .chatModel(chatModel)
-                .chatMemory(chatMemory)
-                .streamingChatModel(streamingChatModel)
-                .build();
+        return switch (codeGenType) {
+            // 生成 HTML、多文件代码，使用流式对话模型
+            case HTML, MULTI_FILE -> AiServices.builder(AICodeGeneratorService.class)
+                    .chatModel(chatModel)
+                    .chatMemory(chatMemory)
+                    .streamingChatModel(openAiStreamingChatModel)
+                    .build();
+            // 生成 Vue 项目，使用工具调用和推理模型
+            case VUE_PROJECT -> AiServices.builder(AICodeGeneratorService.class)
+                    .chatModel(chatModel)
+                    .streamingChatModel(reasoningStreamingChatModel)
+                    .chatMemoryProvider(memoryId -> chatMemory)
+                    .tools(new FileWriteTool())
+                    .hallucinatedToolNameStrategy(
+                            toolExecutionRequest -> ToolExecutionResultMessage.from(toolExecutionRequest,
+                                    "Error: there is not tool called" + toolExecutionRequest.name()))
+                    .build();
+            default -> throw new IllegalArgumentException("不支持的代码生成类型：" + codeGenType);
+        };
+    }
+
+    /**
+     * 构建缓存键
+     *
+     * @param appId       应用唯一标识符
+     * @param codeGenType 码生成类型
+     * @return 缓存键
+     */
+    private String buildCacheKey(long appId, CodeGenTypeEnum codeGenType) {
+        return appId + "_" + codeGenType;
     }
 }

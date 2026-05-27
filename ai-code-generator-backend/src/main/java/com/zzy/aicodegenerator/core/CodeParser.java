@@ -10,7 +10,6 @@ import java.util.regex.Pattern;
  * 代码解析器，负责解析AI生成的代码结果，提取文件名、文件内容等信息。
  *
  * @author zzy
- * @date 2024/6/11
  */
 @Deprecated
 public class CodeParser {
