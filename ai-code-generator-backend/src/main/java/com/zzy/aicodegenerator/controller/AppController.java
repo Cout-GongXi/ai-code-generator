@@ -108,8 +108,8 @@ public class AppController {
         app.setUserId(loginUser.getId());
         // 应用名称默认设置为initPrompt的前12位
         app.setAppName(StrUtil.sub(initPrompt, 0, 12));
-        // 暂时设置为多文件生成
-        app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
+        // 暂时设置为Vue生成
+        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
         // 插入数据库
         boolean result = appService.save(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用创建失败");

@@ -8,6 +8,7 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.zzy.aicodegenerator.constant.AppConstant;
 import com.zzy.aicodegenerator.core.AICodeGeneratorFacade;
+import com.zzy.aicodegenerator.core.handler.StreamHandlerExecutor;
 import com.zzy.aicodegenerator.exception.BusinessException;
 import com.zzy.aicodegenerator.exception.ErrorCode;
 import com.zzy.aicodegenerator.exception.ThrowUtils;
@@ -25,7 +26,6 @@ import com.zzy.aicodegenerator.service.ChatHistoryService;
 import com.zzy.aicodegenerator.service.UserService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -56,6 +56,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private AICodeGeneratorFacade aiCodeGeneratorFacade;
 
+    @Resource
+    private StreamHandlerExecutor streamHandlerExecutor;
+
     @Override
     public Flux<String> chatToGenCode(Long appId, String message, User loginUser) {
         // 1. 参数校验
@@ -71,30 +74,17 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 4. 获取生成模式
         String codeGenType = app.getCodeGenType();
         CodeGenTypeEnum enumGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenType);
-        if (codeGenType == null) {
+        if (enumGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成模式错误");
         }
         // 5. 保存用户消息到数据库中
         chatHistoryService.addChatMessage(appId, loginUser.getId(), message, ChatHistoryMessageTypeEnum.USER.getValue());
 
         // 6. 调用 AI 进行生成
-        Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeSteam(message, enumGenTypeEnum, appId);
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeSteam(message, enumGenTypeEnum, appId);
 
         // 7. 收集 AI 生成的消息，保存到数据库中
-        StringBuilder aiResponseBuilder = new StringBuilder();
-        return contentFlux.map(chunk -> {
-            // 实时收集 AI 相应的内容
-            aiResponseBuilder.append(chunk);
-            return chunk;
-        }).doOnComplete(() -> {
-            // 流式返回完成后，保存 AI 消息到对话历史中
-            String aiResponse = aiResponseBuilder.toString();
-            chatHistoryService.addChatMessage(appId, loginUser.getId(), aiResponse, ChatHistoryMessageTypeEnum.AI.getValue());
-        }).doOnError(error -> {
-            // AI 回复失败，也保存记录到数据库中
-            String errorMessage = "AI 回复失败： " + error.getMessage();
-            chatHistoryService.addChatMessage(appId, loginUser.getId(), errorMessage, ChatHistoryMessageTypeEnum.AI.getValue());
-        });
+        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, enumGenTypeEnum);
     }
 
     @Override
@@ -106,7 +96,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
         // 3. 权限校验，仅允许应用创建者或管理员可以部署应用
-        if (!app.getUserId().equals(loginUser.getId()) || loginUser.getUserRole() == UserRoleEnum.ADMIN.getValue()) {
+        if (!app.getUserId().equals(loginUser.getId()) || loginUser.getUserRole().equals(UserRoleEnum.ADMIN.getValue())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限部署该应用");
         }
         // 4. 检查是否已有 deployKey

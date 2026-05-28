@@ -1,17 +1,24 @@
 package com.zzy.aicodegenerator.core;
 
+import cn.hutool.json.JSONUtil;
 import com.zzy.aicodegenerator.ai.AICodeGeneratorService;
 import com.zzy.aicodegenerator.ai.AICodeGeneratorServiceFactory;
 import com.zzy.aicodegenerator.ai.model.HtmlCodeResult;
 import com.zzy.aicodegenerator.ai.model.MultiFileCodeResult;
+import com.zzy.aicodegenerator.ai.model.message.AiResponseMessage;
+import com.zzy.aicodegenerator.ai.model.message.ToolExecutedMessage;
+import com.zzy.aicodegenerator.ai.model.message.ToolRequestMessage;
 import com.zzy.aicodegenerator.core.parser.CodeParserExecutor;
 import com.zzy.aicodegenerator.core.saver.CodeFileSaverExecutor;
 import com.zzy.aicodegenerator.exception.BusinessException;
 import com.zzy.aicodegenerator.exception.ErrorCode;
 import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
+import dev.langchain4j.service.TokenStream;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.View;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
@@ -24,6 +31,8 @@ import java.io.File;
 public class AICodeGeneratorFacade {
     @Resource
     private AICodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
+    @Autowired
+    private View error;
 
     /**
      * 统一入口，根据类型生成并保存代码
@@ -82,8 +91,8 @@ public class AICodeGeneratorFacade {
                 yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, appId);
             }
             case VUE_PROJECT -> {
-                Flux<String> codeStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
-                yield processCodeStream(codeStream, CodeGenTypeEnum.VUE_PROJECT, appId);
+                TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
+                yield processCodeStream(tokenStream);
             }
             default -> {
                 String errorMsg = "不支持的代码生成类型: " + codeGenTypeEnum.getValue();
@@ -92,6 +101,31 @@ public class AICodeGeneratorFacade {
         };
     }
 
+    /**
+     * 将TokenStream转换为流式响应，并传递工具调用消息
+     *
+     * @param tokenStream 代码流
+     * @return 流式响应
+     */
+    private Flux<String> processCodeStream(TokenStream tokenStream) {
+        return Flux.create(sink -> {
+            tokenStream.onPartialResponse((String partialResponse) -> {
+                AiResponseMessage aiResponseMessage = new AiResponseMessage(partialResponse);
+                sink.next(JSONUtil.toJsonStr(aiResponseMessage));
+            }).onPartialToolExecutionRequest((index, toolExecutionRequest) -> {
+                ToolRequestMessage toolRequestMessage = new ToolRequestMessage(toolExecutionRequest);
+                sink.next(JSONUtil.toJsonStr(toolRequestMessage));
+            }).onToolExecuted((toolExecution) -> {
+                ToolExecutedMessage toolExecuteMessage = new ToolExecutedMessage(toolExecution);
+                sink.next(JSONUtil.toJsonStr(toolExecuteMessage));
+            }).onCompleteResponse((chatResponse) -> {
+                sink.complete();
+            }).onError((error) -> {
+                error.printStackTrace();
+                sink.error(error);
+            }).start();
+        });
+    }
 
     /**
      * 通用的流式处理逻辑
