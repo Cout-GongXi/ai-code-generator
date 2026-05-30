@@ -89,6 +89,18 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Selenium WebDriver 网页截图依赖 -->
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>4.33.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.bonigarcia</groupId>
+            <artifactId>webdrivermanager</artifactId>
+            <version>6.1.0</version>
+        </dependency>
+
         <!-- Caffeine 本地缓存 -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
@@ -101,7 +113,11 @@
             <artifactId>hutool-all</artifactId>
             <version>5.8.38</version>
         </dependency>
-
+        <!-- MINIO 对象存储-->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.12</version> </dependency>
         <!-- AOP 面向切面编程 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

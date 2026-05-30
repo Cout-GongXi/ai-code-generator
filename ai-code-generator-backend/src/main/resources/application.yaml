@@ -48,3 +48,10 @@ langchain4j:
       strict-json-schema: true
       response-format: json_object
 
+minio:
+  # 必须填 9000 端口（API 端口），千万不要填 9001 网页控制台端口！
+  endpoint: http://localhost:9000
+  accessKey: minio
+  secretKey: 123456
+  # 预设一个默认的存储桶（桶名称不能包含大写字母和下划线，只能小写字母、数字和连字符）
+  bucketName: ai-code-generator

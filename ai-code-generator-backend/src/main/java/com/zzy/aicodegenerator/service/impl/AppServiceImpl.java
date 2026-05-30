@@ -8,6 +8,7 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.zzy.aicodegenerator.constant.AppConstant;
 import com.zzy.aicodegenerator.core.AICodeGeneratorFacade;
+import com.zzy.aicodegenerator.core.builder.VueProjectBuilder;
 import com.zzy.aicodegenerator.core.handler.StreamHandlerExecutor;
 import com.zzy.aicodegenerator.exception.BusinessException;
 import com.zzy.aicodegenerator.exception.ErrorCode;
@@ -18,12 +19,13 @@ import com.zzy.aicodegenerator.model.entity.App;
 import com.zzy.aicodegenerator.model.entity.User;
 import com.zzy.aicodegenerator.model.enums.ChatHistoryMessageTypeEnum;
 import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
-import com.zzy.aicodegenerator.model.enums.UserRoleEnum;
 import com.zzy.aicodegenerator.model.vo.AppVO;
 import com.zzy.aicodegenerator.model.vo.UserVO;
 import com.zzy.aicodegenerator.service.AppService;
 import com.zzy.aicodegenerator.service.ChatHistoryService;
+import com.zzy.aicodegenerator.service.ScreenshotService;
 import com.zzy.aicodegenerator.service.UserService;
+import com.zzy.aicodegenerator.utils.MinioUtils;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -58,6 +60,15 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private StreamHandlerExecutor streamHandlerExecutor;
+
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
+
+    @Resource
+    private ScreenshotService screenshotService;
+
+    @Resource
+    private MinioUtils minioUtils;
 
     @Override
     public Flux<String> chatToGenCode(Long appId, String message, User loginUser) {
@@ -96,7 +107,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
         // 3. 权限校验，仅允许应用创建者或管理员可以部署应用
-        if (!app.getUserId().equals(loginUser.getId()) || loginUser.getUserRole().equals(UserRoleEnum.ADMIN.getValue())) {
+        if (!app.getUserId().equals(loginUser.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限部署该应用");
         }
         // 4. 检查是否已有 deployKey
@@ -114,22 +125,55 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "代码生成目录不存在");
         }
-        // 7. 复制文件到部署目录
+        // 7. Vue 项目特殊处理，执行构建
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenType);
+        if (codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
+            boolean buildSuccess = vueProjectBuilder.buildProject(sourceDirPath);
+            ThrowUtils.throwIf(!buildSuccess, ErrorCode.SYSTEM_ERROR, "构建 Vue 项目失败,请重试");
+            // 减产 dist 目录是否存在
+            File distDir = new File(sourceDirPath + File.separator + "dist");
+            ThrowUtils.throwIf(!distDir.exists() || !distDir.isDirectory(), ErrorCode.SYSTEM_ERROR, "项目构建完成但 dist 目录未生成,请重试");
+            // 构建完成后，需要将构建后的文件复制到部署目录
+            sourceDir = distDir;
+        }
+        // 8. 复制文件到部署目录
         String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
         try {
             FileUtil.copyContent(sourceDir, new File(deployDirPath), true);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "复制文件失败");
         }
-        // 8. 更新数据库
+        // 9. 更新数据库
         App updateApp = new App();
         updateApp.setId(appId);
         updateApp.setDeployKey(deployKey);
         updateApp.setDeployedTime(LocalDateTime.now());
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
-        // 9. 返回可以访问的URL
-        return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 10. 得到可以访问的URL
+        String appDeployUrl = String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 11. 异步生成截图并更新应用封面到数据库中
+        generateScreenshotAsync(appId, appDeployUrl);
+        return appDeployUrl;
+    }
+
+    /**
+     * 异步生成应用截图并更新数据库中
+     *
+     * @param appId 应用id
+     * @param appDeployUrl 应用部署的URL
+     */
+    private void generateScreenshotAsync(Long appId, String appDeployUrl) {
+        Thread.startVirtualThread(() -> {
+            // 生成截图
+            String screenshotURL = screenshotService.generateAndUploadScreenshot(appDeployUrl);
+            // 更新应用封面
+            App updateApp = new App();
+            updateApp.setId(appId);
+            updateApp.setCover(screenshotURL);
+            boolean result = this.updateById(updateApp);
+            ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新应用封面失败");
+        });
     }
 
     @Override
@@ -139,6 +183,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         AppVO appVO = new AppVO();
         BeanUtils.copyProperties(app, appVO);
+        // 将相对路径拼接为完整的 MinIO 访问 URL
+        if (StrUtil.isNotBlank(app.getCover())) {
+            appVO.setCover(minioUtils.getFileUrl(app.getCover()));
+        }
         // 获取用户信息
         Long userId = app.getUserId();
         if (userId != null) {
@@ -200,7 +248,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
      * @return 删除结果
      */
     @Override
-    public boolean removeById( Serializable id) {
+    public boolean removeById(Serializable id) {
         long appId = Long.parseLong(id.toString());
 
         if (appId <= 0) {
