@@ -128,6 +128,40 @@
           </div>
         </div>
 
+        <!-- 选中元素信息展示 -->
+        <a-alert
+          v-if="selectedElementInfo"
+          class="selected-element-alert"
+          type="info"
+          closable
+          @close="clearSelectedElement"
+        >
+          <template #message>
+            <div class="selected-element-info">
+              <div class="element-header">
+                <span class="element-tag">
+                  选中元素：{{ selectedElementInfo.tagName.toLowerCase() }}
+                </span>
+                <span v-if="selectedElementInfo.id" class="element-id">
+                  #{{ selectedElementInfo.id }}
+                </span>
+                <span v-if="selectedElementInfo.className" class="element-class">
+                  .{{ selectedElementInfo.className.split(' ').join('.') }}
+                </span>
+              </div>
+              <div class="element-details">
+                <div v-if="selectedElementInfo.textContent" class="element-item">
+                  内容: {{ selectedElementInfo.textContent.substring(0, 50) }}
+                  {{ selectedElementInfo.textContent.length > 50 ? '...' : '' }}
+                </div>
+                <div v-if="selectedElementInfo.pagePath" class="element-item">
+                  页面路径: {{ selectedElementInfo.pagePath }}
+                </div>
+              </div>
+            </div>
+          </template>
+        </a-alert>
+
         <!-- 用户消息输入框 -->
         <div class="input-container">
           <div class="input-wrapper">
@@ -175,6 +209,28 @@
         <div class="preview-header">
           <h3>生成后的网页展示</h3>
           <div class="preview-actions">
+            <a-button
+              v-if="previewUrl && !isEditMode"
+              type="primary"
+              ghost
+              @click="enterEditMode"
+            >
+              <template #icon>
+                <EditOutlined />
+              </template>
+              进入编辑模式
+            </a-button>
+            <a-button
+              v-if="isEditMode"
+              type="default"
+              danger
+              @click="exitEditMode"
+            >
+              <template #icon>
+                <CloseOutlined />
+              </template>
+              退出编辑模式
+            </a-button>
             <a-button v-if="previewUrl" type="link" @click="openInNewTab">
               <template #icon>
                 <ExportOutlined />
@@ -194,6 +250,7 @@
           </div>
           <iframe
             v-else
+            ref="previewIframe"
             :src="previewUrl"
             class="preview-iframe"
             frameborder="0"
@@ -234,6 +291,11 @@ import {
 } from '@/api/appController'
 import { listAppChatHistoryByPage } from '@/api/chatHistoryController'
 import { CodeGenTypeEnum, formatCodeGenType } from '@/utils/codeGenTypes.ts'
+import {
+  getInjectedScript,
+  formatElementInfoToPrompt,
+  type SelectedElementInfo,
+} from '@/utils/visualEditor'
 import request from '@/request'
 
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -251,6 +313,8 @@ import {
   HomeOutlined,
   AppstoreOutlined,
   DownloadOutlined,
+  EditOutlined,
+  CloseOutlined,
 } from '@ant-design/icons-vue'
 
 const route = useRoute()
@@ -284,6 +348,11 @@ const initialHistoryLoading = ref(true)
 // 预览相关
 const previewUrl = ref('')
 const previewReady = ref(false)
+const previewIframe = ref<HTMLIFrameElement>()
+
+// 可视化编辑相关
+const isEditMode = ref(false)
+const selectedElementInfo = ref<SelectedElementInfo | null>(null)
 
 // 部署相关
 const deploying = ref(false)
@@ -450,7 +519,13 @@ const sendMessage = async () => {
     return
   }
 
-  const message = userInput.value.trim()
+  let message = userInput.value.trim()
+
+  // 如果有选中的元素，将元素信息添加到提示词中
+  if (selectedElementInfo.value) {
+    message += formatElementInfoToPrompt(selectedElementInfo.value)
+  }
+
   userInput.value = ''
 
   // 添加用户消息
@@ -469,6 +544,12 @@ const sendMessage = async () => {
 
   await nextTick()
   scrollToBottom()
+
+  // 清除选中元素并退出编辑模式
+  if (selectedElementInfo.value) {
+    clearSelectedElement()
+    exitEditMode()
+  }
 
   // 开始生成
   isGenerating.value = true
@@ -684,6 +765,108 @@ const openDeployedSite = () => {
 // iframe加载完成
 const onIframeLoad = () => {
   previewReady.value = true
+  // 如果处于编辑模式，重新注入脚本
+  if (isEditMode.value) {
+    injectEditorScript()
+  }
+}
+
+// 进入编辑模式
+const enterEditMode = () => {
+  if (!previewIframe.value) {
+    message.warning('预览未加载完成')
+    return
+  }
+  isEditMode.value = true
+  injectEditorScript()
+  message.success('已进入编辑模式，点击网页元素进行选择')
+}
+
+// 退出编辑模式
+const exitEditMode = () => {
+  if (!previewIframe.value) return
+
+  isEditMode.value = false
+  selectedElementInfo.value = null
+
+  // 通知 iframe 停止编辑模式
+  try {
+    previewIframe.value.contentWindow?.postMessage(
+      { type: 'STOP_EDIT_MODE' },
+      '*'
+    )
+  } catch (error) {
+    console.error('退出编辑模式失败：', error)
+  }
+}
+
+// 清除选中元素
+const clearSelectedElement = () => {
+  selectedElementInfo.value = null
+
+  // 通知 iframe 清除选中状态
+  if (previewIframe.value) {
+    try {
+      previewIframe.value.contentWindow?.postMessage(
+        { type: 'CLEAR_SELECTION' },
+        '*'
+      )
+    } catch (error) {
+      console.error('清除选中元素失败：', error)
+    }
+  }
+}
+
+// 注入编辑器脚本到 iframe
+const injectEditorScript = () => {
+  if (!previewIframe.value?.contentWindow) return
+
+  try {
+    const iframeDoc =
+      previewIframe.value.contentDocument ||
+      previewIframe.value.contentWindow.document
+
+    // 检查脚本是否已注入
+    if (iframeDoc.getElementById('visual-editor-script')) {
+      // 已注入，直接启动编辑模式
+      previewIframe.value.contentWindow.postMessage(
+        { type: 'START_EDIT_MODE' },
+        '*'
+      )
+      return
+    }
+
+    // 注入脚本
+    const script = iframeDoc.createElement('script')
+    script.id = 'visual-editor-script'
+    script.textContent = getInjectedScript()
+    iframeDoc.body.appendChild(script)
+  } catch (error) {
+    console.error('注入编辑器脚本失败：', error)
+    message.error('无法启动编辑模式，可能是跨域限制')
+  }
+}
+
+// 监听来自 iframe 的消息
+const handleIframeMessage = (event: MessageEvent) => {
+  if (!event.data || !event.data.type) return
+
+  switch (event.data.type) {
+    case 'EDITOR_READY':
+      // 编辑器脚本已加载，启动编辑模式
+      if (isEditMode.value && previewIframe.value) {
+        previewIframe.value.contentWindow?.postMessage(
+          { type: 'START_EDIT_MODE' },
+          '*'
+        )
+      }
+      break
+    case 'ELEMENT_SELECTED':
+      // 接收选中的元素信息
+      selectedElementInfo.value = event.data.data
+      message.success('已选中元素，可以在输入框中描述修改需求')
+      break
+  }
 }
 
 // 编辑应用
@@ -755,10 +938,15 @@ onMounted(() => {
       await sendInitialMessage(appInfo.value.initPrompt)
     }
   })
+
+  // 监听来自 iframe 的消息
+  window.addEventListener('message', handleIframeMessage)
 })
 
 // 清理资源
 onUnmounted(() => {
+  // 移除消息监听器
+  window.removeEventListener('message', handleIframeMessage)
   // EventSource 会在组件卸载时自动清理
 })
 </script>
@@ -994,6 +1182,55 @@ onUnmounted(() => {
   padding: 16px 20px 20px;
   background: rgba(255, 255, 255, 0.7);
   border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+/* 选中元素信息展示 */
+.selected-element-alert {
+  margin: 0 20px 12px;
+  border-radius: 12px;
+}
+
+.selected-element-info {
+  font-size: 13px;
+}
+
+.element-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.element-tag {
+  color: #1890ff;
+  background: #e6f7ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.element-id {
+  color: #52c41a;
+  background: #f6ffed;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.element-class {
+  color: #fa8c16;
+  background: #fff7e6;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.element-details {
+  font-size: 12px;
+  color: #666;
+}
+
+.element-item {
+  margin-top: 4px;
+  line-height: 1.6;
 }
 
 .input-wrapper {
