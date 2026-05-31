@@ -16,12 +16,10 @@ import com.zzy.aicodegenerator.exception.ThrowUtils;
 import com.zzy.aicodegenerator.model.dto.app.*;
 import com.zzy.aicodegenerator.model.entity.App;
 import com.zzy.aicodegenerator.model.entity.User;
-import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
 import com.zzy.aicodegenerator.model.vo.AppVO;
 import com.zzy.aicodegenerator.service.AppService;
 import com.zzy.aicodegenerator.service.ProjectDownloadService;
 import com.zzy.aicodegenerator.service.UserService;
-
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -110,9 +108,9 @@ public class AppController {
     /**
      * 下载应用代码。
      *
-     * @param appId       应用 id
-     * @param request     HTTP 请求
-     * @param response    HTTP 响应
+     * @param appId    应用 id
+     * @param request  HTTP 请求
+     * @param response HTTP 响应
      */
     @GetMapping("/download/{appId}")
     public void downloadAppCode(@PathVariable Long appId, HttpServletRequest request, HttpServletResponse response) {
@@ -154,24 +152,8 @@ public class AppController {
     @PostMapping("/add")
     public BaseResponse<Long> addApp(@RequestBody AppAddRequest addAddRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(addAddRequest == null, ErrorCode.PARAMS_ERROR);
-        // 参数校验
-        String initPrompt = addAddRequest.getInitPrompt();
-        ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "initPrompt 不能为空");
-        // 获取当前登录用户
-        User loginUser = userService.getLoginUser(request);
-        // 构造入库对象
-        App app = new App();
-        BeanUtils.copyProperties(addAddRequest, app);
-        // 设置用户id
-        app.setUserId(loginUser.getId());
-        // 应用名称默认设置为initPrompt的前12位
-        app.setAppName(StrUtil.sub(initPrompt, 0, 12));
-        // 暂时设置为Vue生成
-        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
-        // 插入数据库
-        boolean result = appService.save(app);
-        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用创建失败");
-        return ResultUtils.success(app.getId());
+        Long appId = appService.createApp(addAddRequest, userService.getLoginUser(request));
+        return ResultUtils.success(appId);
     }
 
 

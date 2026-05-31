@@ -6,6 +6,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
+import com.zzy.aicodegenerator.ai.AiCodeGenTypeRoutingService;
 import com.zzy.aicodegenerator.constant.AppConstant;
 import com.zzy.aicodegenerator.core.AICodeGeneratorFacade;
 import com.zzy.aicodegenerator.core.builder.VueProjectBuilder;
@@ -14,6 +15,7 @@ import com.zzy.aicodegenerator.exception.BusinessException;
 import com.zzy.aicodegenerator.exception.ErrorCode;
 import com.zzy.aicodegenerator.exception.ThrowUtils;
 import com.zzy.aicodegenerator.mapper.AppMapper;
+import com.zzy.aicodegenerator.model.dto.app.AppAddRequest;
 import com.zzy.aicodegenerator.model.dto.app.AppQueryRequest;
 import com.zzy.aicodegenerator.model.entity.App;
 import com.zzy.aicodegenerator.model.entity.User;
@@ -57,6 +59,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private AICodeGeneratorFacade aiCodeGeneratorFacade;
+
+    @Resource
+    private AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
 
     @Resource
     private StreamHandlerExecutor streamHandlerExecutor;
@@ -157,10 +162,32 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         return appDeployUrl;
     }
 
+    @Override
+    public Long createApp(AppAddRequest appAddRequest, User loginUser) {
+        // 参数校验
+        String initPrompt = appAddRequest.getInitPrompt();
+        ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "initPrompt 不能为空");
+        // 构造入库对象
+        App app = new App();
+        BeanUtils.copyProperties(appAddRequest, app);
+        // 设置用户id
+        app.setUserId(loginUser.getId());
+        // 应用名称默认设置为initPrompt的前12位
+        app.setAppName(StrUtil.sub(initPrompt, 0, 20));
+        // 使用 AI 智能选择代码生成类型
+        CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
+        app.setCodeGenType(selectedCodeGenType.getValue());
+        // 插入数据库
+        boolean result = this.save(app);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用创建失败");
+        log.info("应用创建成功，id: {}, 类型：{}", app.getId(), selectedCodeGenType);
+        return app.getId();
+    }
+
     /**
      * 异步生成应用截图并更新数据库中
      *
-     * @param appId 应用id
+     * @param appId        应用id
      * @param appDeployUrl 应用部署的URL
      */
     private void generateScreenshotAsync(Long appId, String appDeployUrl) {

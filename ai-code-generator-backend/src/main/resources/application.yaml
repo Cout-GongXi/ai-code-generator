@@ -45,8 +45,8 @@ langchain4j:
       log-requests: true
       log-responses: true
       max-tokens: 8192
-      strict-json-schema: true
-      response-format: json_object
+#      strict-json-schema: true
+#      response-format: json_object
 
 minio:
   # 必须填 9000 端口（API 端口），千万不要填 9001 网页控制台端口！

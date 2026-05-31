@@ -79,7 +79,7 @@ public class ScreenshotServiceImpl implements ScreenshotService {
     }
 
     /**
-     * 清理本地文件
+     * 清理本地文件及其临时目录
      *
      * @param localFilePath 本地文件路径
      */
@@ -88,6 +88,13 @@ public class ScreenshotServiceImpl implements ScreenshotService {
         if (localFile.exists()){
             FileUtil.del(localFile);
             log.info("清理本地文件成功:{}", localFilePath);
+
+            // 删除父目录（临时目录）
+            File parentDir = localFile.getParentFile();
+            if (parentDir != null && parentDir.exists() && parentDir.getPath().contains("/tmp/screenshots/")) {
+                FileUtil.del(parentDir);
+                log.info("清理临时目录成功:{}", parentDir.getPath());
+            }
         }
     }
 }
