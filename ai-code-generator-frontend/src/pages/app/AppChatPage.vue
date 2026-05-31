@@ -3,6 +3,9 @@
     <!-- 顶部栏 -->
     <div class="header-bar">
       <div class="header-left">
+        <RouterLink to="/" class="back-home" title="返回主页">
+          <img class="logo" src="@/assets/logo.png" alt="Logo" />
+        </RouterLink>
         <h1 class="app-name">{{ appInfo?.appName || '网站生成器' }}</h1>
       </div>
       <div class="header-right">
@@ -12,12 +15,56 @@
           </template>
           应用详情
         </a-button>
+        <a-button type="default" @click="downloadCode" :loading="downloading">
+          <template #icon>
+            <DownloadOutlined />
+          </template>
+          下载代码
+        </a-button>
         <a-button type="primary" @click="deployApp" :loading="deploying">
           <template #icon>
             <CloudUploadOutlined />
           </template>
-          部署按钮
+          部署
         </a-button>
+        <!-- 用户头像与菜单 -->
+        <a-dropdown
+          v-if="loginUserStore.loginUser.id"
+          placement="bottomRight"
+        >
+          <div class="avatar-circle">
+            <img
+              v-if="loginUserStore.loginUser.userAvatar"
+              :src="loginUserStore.loginUser.userAvatar"
+              class="avatar-img"
+            />
+            <span v-else class="avatar-letter">
+              {{ (loginUserStore.loginUser.userName ?? '?')[0] }}
+            </span>
+          </div>
+          <template #overlay>
+            <a-menu>
+              <a-menu-item disabled class="menu-username">
+                {{ loginUserStore.loginUser.userName ?? '用户' }}
+              </a-menu-item>
+              <a-menu-divider />
+              <a-menu-item @click="goHome">
+                <HomeOutlined />
+                返回主页
+              </a-menu-item>
+              <a-menu-item @click="goMyApps">
+                <AppstoreOutlined />
+                我的应用
+              </a-menu-item>
+              <a-menu-divider />
+              <a-menu-item @click="doLogout">
+                <LogoutOutlined />
+                退出登录
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+        <RouterLink v-else to="/user/login" class="login-btn">登录</RouterLink>
       </div>
     </div>
 
@@ -27,6 +74,15 @@
       <div class="chat-section">
         <!-- 消息区域 -->
         <div class="messages-container" ref="messagesContainer">
+          <!-- 首次历史加载中：占位骨架，避免空白 -->
+          <div
+            v-if="initialHistoryLoading && messages.length === 0"
+            class="chat-skeleton"
+          >
+            <a-skeleton active avatar :paragraph="{ rows: 2 }" />
+            <a-skeleton active avatar :paragraph="{ rows: 3 }" />
+            <a-skeleton active avatar :paragraph="{ rows: 2 }" />
+          </div>
           <!-- 加载更多历史消息 -->
           <div v-if="messages.length > 0" class="load-more-wrapper">
             <a-button
@@ -164,9 +220,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, onUnmounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
+import { userLogout } from '@/api/userController'
 import {
   getAppVoById,
   deployApp as deployAppApi,
@@ -187,6 +244,10 @@ import {
   SendOutlined,
   ExportOutlined,
   InfoCircleOutlined,
+  LogoutOutlined,
+  HomeOutlined,
+  AppstoreOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons-vue'
 
 const route = useRoute()
@@ -214,6 +275,8 @@ const messagesContainer = ref<HTMLElement>()
 const HISTORY_PAGE_SIZE = 10
 const historyLoading = ref(false)
 const hasMoreHistory = ref(false)
+// 首次历史加载状态：仅用于初次进入时展示骨架占位
+const initialHistoryLoading = ref(true)
 
 // 预览相关
 const previewUrl = ref('')
@@ -223,6 +286,9 @@ const previewReady = ref(false)
 const deploying = ref(false)
 const deployModalVisible = ref(false)
 const deployUrl = ref('')
+
+// 下载相关
+const downloading = ref(false)
 
 // 权限相关
 const isOwner = computed(() => {
@@ -239,6 +305,28 @@ const appDetailVisible = ref(false)
 // 显示应用详情
 const showAppDetail = () => {
   appDetailVisible.value = true
+}
+
+// 头像菜单：返回主页
+const goHome = () => {
+  router.push('/')
+}
+
+// 头像菜单：我的应用
+const goMyApps = () => {
+  router.push('/my/apps')
+}
+
+// 头像菜单：退出登录
+const doLogout = async () => {
+  const res = await userLogout()
+  if (res.data.code === 0) {
+    loginUserStore.setLoginUser({ userName: '未登录' })
+    message.success('退出登录成功')
+    await router.push('/user/login')
+  } else {
+    message.error('退出登录失败，' + res.data.message)
+  }
 }
 
 // 获取应用信息
@@ -495,6 +583,59 @@ const scrollToBottom = () => {
   }
 }
 
+// 下载代码
+const downloadCode = async () => {
+  if (!appId.value) {
+    message.error('应用ID不存在')
+    return
+  }
+  downloading.value = true
+  try {
+    const baseURL = request.defaults.baseURL || API_BASE_URL
+    const url = `${baseURL}/app/download/${appId.value}`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+    })
+
+    if (!response.ok) {
+      throw new Error(`下载失败: ${response.status}`)
+    }
+
+    // 获取文件名
+    const contentDisposition = response.headers.get('Content-Disposition')
+    const fileName = contentDisposition?.match(/filename="(.+)"/)?.[1] || `app-${appId.value}.zip`
+
+    // 下载文件
+    const blob = await response.blob()
+
+    // 检查 blob 类型和大小
+    console.log('下载的文件信息:', {
+      size: blob.size,
+      type: blob.type,
+      fileName: fileName
+    })
+
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+
+    // 清理
+    document.body.removeChild(link)
+    URL.revokeObjectURL(downloadUrl)
+    message.success('代码下载成功')
+  } catch (error) {
+    console.error('下载失败：', error)
+    message.error('下载失败，请重试')
+  } finally {
+    downloading.value = false
+  }
+}
+
 // 部署应用
 const deployApp = async () => {
   if (!appId.value) {
@@ -568,28 +709,49 @@ const deleteApp = async () => {
   }
 }
 
-// 页面加载初始化
-onMounted(async () => {
-  await fetchAppInfo()
-  if (!appInfo.value) return
-
-  // 加载历史对话
-  await loadChatHistory(false)
-
-  // 如果已有至少 2 条对话记录（一问一答），展示对应的网站
-  if (messages.value.length >= 2) {
-    updatePreview()
+// 页面加载初始化：并行加载，立即渲染骨架，不阻塞首屏
+onMounted(() => {
+  const id = route.params.id as string
+  if (!id) {
+    message.error('应用ID不存在')
+    router.push('/')
+    return
   }
+  // 同步先设置 appId，让两个请求都能并行发起
+  appId.value = id
 
-  // 仅当是应用所有者、没有历史对话、存在初始提示词、且不是查看模式时，自动发送
-  if (
-    !route.query.view &&
-    isOwner.value &&
-    messages.value.length === 0 &&
-    appInfo.value.initPrompt
-  ) {
-    await sendInitialMessage(appInfo.value.initPrompt)
-  }
+  // 并行加载应用信息与历史对话；任一完成后立即更新对应区域
+  const appInfoPromise = fetchAppInfo()
+  const chatHistoryPromise = loadChatHistory(false).finally(() => {
+    initialHistoryLoading.value = false
+  })
+
+  // 历史对话一旦加载完成，若已有内容就先把右侧预览顶上去
+  chatHistoryPromise.then(() => {
+    if (messages.value.length >= 2 && appInfo.value?.codeGenType) {
+      updatePreview()
+    }
+  })
+
+  // 应用信息回来后，再尝试一次预览（覆盖 codeGenType 之前未就绪的情况）
+  appInfoPromise.then(() => {
+    if (appInfo.value && messages.value.length >= 2) {
+      updatePreview()
+    }
+  })
+
+  // 两者都就绪后决定是否自动发送初始提示词
+  Promise.all([appInfoPromise, chatHistoryPromise]).then(async () => {
+    if (!appInfo.value) return
+    if (
+      !route.query.view &&
+      isOwner.value &&
+      messages.value.length === 0 &&
+      appInfo.value.initPrompt
+    ) {
+      await sendInitialMessage(appInfo.value.initPrompt)
+    }
+  })
 })
 
 // 清理资源
@@ -628,6 +790,25 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.back-home {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  border-radius: 50%;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.back-home:hover {
+  opacity: 0.85;
+  transform: scale(1.06);
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
 .app-name {
   margin: 0;
   font-size: 20px;
@@ -638,6 +819,69 @@ onUnmounted(() => {
 .header-right {
   display: flex;
   gap: 12px;
+  align-items: center;
+}
+
+/* 用户头像 */
+.avatar-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s, transform 0.2s;
+  flex-shrink: 0;
+}
+
+.avatar-circle:hover {
+  opacity: 0.85;
+  transform: scale(1.06);
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-letter {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1;
+}
+
+.login-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  text-decoration: none;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.6);
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.login-btn:hover {
+  color: #1a1a1a;
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(148, 163, 184, 0.55);
+}
+
+:global(.menu-username) {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a !important;
+  cursor: default !important;
+  padding: 8px 16px !important;
 }
 
 /* 主要内容区域 */
@@ -677,6 +921,13 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   padding: 8px 0 16px;
+}
+
+.chat-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 12px 4px 4px;
 }
 
 .no-more-tip {

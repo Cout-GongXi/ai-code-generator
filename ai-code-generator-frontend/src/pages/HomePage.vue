@@ -14,10 +14,6 @@ import AppCard from '@/components/AppCard.vue'
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
 
-const wallpaperUrl = ref(
-  'https://haowallpaper.com/link//common/file/previewFileImg/17463561646820736',
-)
-
 // 用户提示词
 const userPrompt = ref('')
 const creating = ref(false)
@@ -168,7 +164,6 @@ onMounted(() => {
 
 <template>
   <div id="homePage" ref="homePageRef">
-    <img class="home-bg" :src="wallpaperUrl" alt="" />
     <div class="container">
       <!-- 网站标题和描述 -->
       <div class="hero-section">

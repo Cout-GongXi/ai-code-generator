@@ -6,12 +6,19 @@
         <span>🤖</span>
       </div>
       <div class="app-overlay">
-        <a-space>
+        <a-space v-if="!featured">
           <a-button type="primary" @click="handleViewChat">查看对话</a-button>
           <a-button v-if="app.deployKey" type="default" @click="handleViewWork"
             >查看作品</a-button
           >
         </a-space>
+        <button
+          v-else-if="app.deployKey"
+          class="featured-view-btn"
+          @click.stop="handleViewWork"
+        >
+          查看作品
+        </button>
       </div>
     </div>
     <div class="app-info">
@@ -116,6 +123,38 @@ const handleViewWork = () => {
 
 .app-card:hover .app-overlay {
   opacity: 1;
+}
+
+.app-card--featured .app-overlay {
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.15) 60%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  align-items: flex-end;
+  padding: 14px;
+}
+
+.featured-view-btn {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 10px 0;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+}
+
+.featured-view-btn:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
 }
 
 .app-info {

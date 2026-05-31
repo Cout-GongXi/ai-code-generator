@@ -1,5 +1,5 @@
 <template>
-  <a-layout class="basic-layout">
+  <a-layout class="basic-layout" :class="{ 'home-bg': isHome }">
     <!-- 顶部导航栏 -->
     <GlobalHeader v-if="!isStandalonePage" />
     <!-- 主要内容区域 -->
@@ -22,12 +22,17 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const isStandalonePage = computed(() => route.meta.standalone === true)
+const isHome = computed(() => route.path === '/')
 </script>
 
 <style scoped>
 .basic-layout {
   background: none;
   min-height: 100vh;
+}
+
+.basic-layout.home-bg {
+  background: #eef3f8;
 }
 
 .main-content {

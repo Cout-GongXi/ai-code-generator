@@ -10,6 +10,12 @@
       <!-- 中间导航 -->
       <nav class="nav">
         <RouterLink to="/" class="nav-link" :class="{ active: currentPath === '/' }">主页</RouterLink>
+        <RouterLink
+          v-if="loginUserStore.loginUser.id"
+          to="/my/apps"
+          class="nav-link"
+          :class="{ active: currentPath === '/my/apps' }"
+        >我的应用</RouterLink>
         <template v-if="isAdmin">
           <RouterLink to="/admin/userManage" class="nav-link" :class="{ active: currentPath === '/admin/userManage' }">用户管理</RouterLink>
           <RouterLink to="/admin/appManage" class="nav-link" :class="{ active: currentPath === '/admin/appManage' }">应用管理</RouterLink>

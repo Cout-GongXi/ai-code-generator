@@ -1,6 +1,7 @@
 /**
  * 环境变量配置
  */
+import { CodeGenTypeEnum } from '@/utils/codeGenTypes.ts'
 
 const DEFAULT_DEPLOY_DOMAIN =
   typeof window !== 'undefined'
@@ -8,11 +9,9 @@ const DEFAULT_DEPLOY_DOMAIN =
     : 'http://localhost:8010'
 
 // 应用部署域名
-export const DEPLOY_DOMAIN =
-  (import.meta.env.VITE_DEPLOY_DOMAIN || DEFAULT_DEPLOY_DOMAIN).replace(
-    /\/+$/,
-    '',
-  )
+export const DEPLOY_DOMAIN = (
+  import.meta.env.VITE_DEPLOY_DOMAIN || DEFAULT_DEPLOY_DOMAIN
+).replace(/\/+$/, '')
 
 // API 基础地址
 export const API_BASE_URL =
@@ -29,5 +28,10 @@ export const getDeployUrl = (deployKey: string) => {
 
 // 获取静态资源预览URL
 export const getStaticPreviewUrl = (codeGenType: string, appId: string) => {
-  return `${STATIC_BASE_URL}/${codeGenType}_${appId}/`
+  const baseUrl = `${STATIC_BASE_URL}/${codeGenType}_${appId}/`
+  // 如果是 Vue 项目， 浏览器地址需要添加 dist 后缀
+  if (codeGenType === CodeGenTypeEnum.VUE_PROJECT) {
+    return `${baseUrl}dist/index.html`
+  }
+  return baseUrl
 }
