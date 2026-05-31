@@ -7,6 +7,9 @@
           <img class="logo" src="@/assets/logo.png" alt="Logo" />
         </RouterLink>
         <h1 class="app-name">{{ appInfo?.appName || '网站生成器' }}</h1>
+        <a-tag v-if="appInfo?.codeGenType" color="blue" class="code-gen-type-tag">
+          {{ formatCodeGenType(appInfo.codeGenType) }}
+        </a-tag>
       </div>
       <div class="header-right">
         <a-button type="default" @click="showAppDetail">
@@ -230,7 +233,7 @@ import {
   deleteApp as deleteAppApi,
 } from '@/api/appController'
 import { listAppChatHistoryByPage } from '@/api/chatHistoryController'
-import { CodeGenTypeEnum } from '@/utils/codeGenTypes.ts'
+import { CodeGenTypeEnum, formatCodeGenType } from '@/utils/codeGenTypes.ts'
 import request from '@/request'
 
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -814,6 +817,11 @@ onUnmounted(() => {
   font-size: 20px;
   font-weight: 700;
   color: #0f172a;
+}
+
+.code-gen-type-tag {
+  margin-left: 12px;
+  font-size: 13px;
 }
 
 .header-right {
