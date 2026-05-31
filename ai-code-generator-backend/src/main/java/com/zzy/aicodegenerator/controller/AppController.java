@@ -10,6 +10,7 @@ import com.zzy.aicodegenerator.common.DeleteRequest;
 import com.zzy.aicodegenerator.common.ResultUtils;
 import com.zzy.aicodegenerator.constant.AppConstant;
 import com.zzy.aicodegenerator.constant.UserConstant;
+import com.zzy.aicodegenerator.exception.BusinessException;
 import com.zzy.aicodegenerator.exception.ErrorCode;
 import com.zzy.aicodegenerator.exception.ThrowUtils;
 import com.zzy.aicodegenerator.model.dto.app.*;
@@ -18,10 +19,12 @@ import com.zzy.aicodegenerator.model.entity.User;
 import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
 import com.zzy.aicodegenerator.model.vo.AppVO;
 import com.zzy.aicodegenerator.service.AppService;
+import com.zzy.aicodegenerator.service.ProjectDownloadService;
 import com.zzy.aicodegenerator.service.UserService;
 
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.BeanUtils;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.io.File;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +52,17 @@ public class AppController {
     @Resource
     private UserService userService;
 
+    @Resource
+    private ProjectDownloadService projectDownloadService;
+
+    /**
+     * 聊天生成代码。
+     *
+     * @param appId   应用 id
+     * @param message 对话内容
+     * @param request HTTP 请求
+     * @return 生成的代码
+     */
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId, @RequestParam String message, HttpServletRequest request) {
         // 参数校验
@@ -69,6 +84,13 @@ public class AppController {
                 ));
     }
 
+    /**
+     * 部署应用。
+     *
+     * @param appDeployRequest 应用部署请求体
+     * @param request          HTTP 请求
+     * @return 部署结果
+     */
     @PostMapping("/deploy")
     public BaseResponse<String> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
         // 参数校验
@@ -84,6 +106,42 @@ public class AppController {
         return ResultUtils.success(deployUrl);
 
     }
+
+    /**
+     * 下载应用代码。
+     *
+     * @param appId       应用 id
+     * @param request     HTTP 请求
+     * @param response    HTTP 响应
+     */
+    @GetMapping("/download/{appId}")
+    public void downloadAppCode(@PathVariable Long appId, HttpServletRequest request, HttpServletResponse response) {
+        // 参数校验
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "appId 错误");
+
+        App app = appService.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        // 权限校验
+        User loginUser = userService.getLoginUser(request);
+        if (!app.getUserId().equals(loginUser.getId())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限下载该应用代码");
+        }
+        // 构建应用代码目录
+        String codeGenType = app.getCodeGenType();
+        String sourceDirName = codeGenType + "_" + appId;
+        String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
+        // 检查代码目录是否存在
+        if (!new File(sourceDirPath).exists()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "应用代码不存在");
+        }
+        // 生成下载文件名（不建议添加中文内容）
+        String downloadFileName = String.valueOf(appId);
+
+        // 调用服务生成下载文件
+        projectDownloadService.downloadProjectAsZip(sourceDirPath, downloadFileName, response);
+    }
+
+
 // ==================== 用户接口 ====================
 
     /**
@@ -128,7 +186,7 @@ public class AppController {
     public BaseResponse<Boolean> updateApp(@RequestBody AppUpdateRequest appUpdateRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(appUpdateRequest == null || appUpdateRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(request);
-        long id = loginUser.getId();
+
         App oldApp = appService.getById(appUpdateRequest.getId());
         ThrowUtils.throwIf(oldApp == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
         // 校验权限
