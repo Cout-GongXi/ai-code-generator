@@ -14,7 +14,7 @@
     </a-form>
     <a-divider />
     <!-- 表格 -->
-    <a-table :columns="columns" :data-source="data" :pagination="pagination" @change="doTableChange">
+    <a-table :columns="columns" :data-source="data" :pagination="pagination" :loading="loading" @change="doTableChange">
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'userAvatar'">
           <a-image :src="record.userAvatar" :width="120" />
@@ -111,15 +111,21 @@ const columns = [
 
 const data = ref<API.UserVO[]>([])
 const total = ref(0)
+const loading = ref(false)
 const searchParams = reactive<API.UserQueryRequest>({ pageNum: 1, pageSize: 10 })
 
 const fetchData = async () => {
-  const res = await listUserVoByPage({ ...searchParams })
-  if (res.data.data) {
-    data.value = res.data.data.records ?? []
-    total.value = res.data.data.totalRow ?? 0
-  } else {
-    message.error('获取数据失败，' + res.data.message)
+  loading.value = true
+  try {
+    const res = await listUserVoByPage({ ...searchParams })
+    if (res.data.data) {
+      data.value = res.data.data.records ?? []
+      total.value = res.data.data.totalRow ?? 0
+    } else {
+      message.error('获取数据失败，' + res.data.message)
+    }
+  } finally {
+    loading.value = false
   }
 }
 

@@ -35,6 +35,7 @@
       :columns="columns"
       :data-source="data"
       :pagination="pagination"
+      :loading="loading"
       @change="doTableChange"
       :scroll="{ x: 1100 }"
     >
@@ -133,6 +134,7 @@ const columns = [
 // 数据
 const data = ref<API.AppVO[]>([])
 const total = ref(0)
+const loading = ref(false)
 
 // 搜索条件
 const searchParams = reactive<API.AppQueryRequest>({
@@ -150,6 +152,7 @@ const fetchData = async () => {
     return
   }
 
+  loading.value = true
   try {
     const res = await listUserAppsVoByPage({ ...searchParams })
     if (res.data.code === 0 && res.data.data) {
@@ -161,6 +164,8 @@ const fetchData = async () => {
   } catch (error) {
     console.error('获取数据失败：', error)
     message.error('获取数据失败')
+  } finally {
+    loading.value = false
   }
 }
 

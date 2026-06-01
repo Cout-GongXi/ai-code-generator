@@ -4,15 +4,8 @@
 
 <script setup lang="ts">
 import BasicLayout from '@/layouts/BasicLayout.vue'
-import { useLoginUserStore } from '@/stores/loginUser.ts'
-import { onMounted } from 'vue'
-const loginUserStore = useLoginUserStore()
-// 应用启动时获取登录用户信息
-onMounted(() => {
-  loginUserStore.fetchLoginUser()
-})
 </script>
-<style scoped>
+<style>
 /* 全局样式优化 */
 * {
   box-sizing: border-box;
@@ -31,5 +24,25 @@ body {
 
 html {
   overflow-x: hidden;
+}
+
+/* 全局隐藏滚动条（保留滚动功能） */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge, Opera */
+  width: 0 !important;
+  height: 0 !important;
+}
+
+*::-webkit-scrollbar-track {
+  display: none;
+}
+
+*::-webkit-scrollbar-thumb {
+  display: none;
 }
 </style>
