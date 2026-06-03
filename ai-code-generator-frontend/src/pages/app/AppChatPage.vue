@@ -72,9 +72,9 @@
     </div>
 
     <!-- 主要内容区域 -->
-    <div class="main-content">
+    <div class="main-content" ref="mainContentRef">
       <!-- 左侧对话区域 -->
-      <div class="chat-section">
+      <div class="chat-section" :style="{ width: chatWidthPct + '%' }">
         <!-- 消息区域 -->
         <div class="messages-container" ref="messagesContainer">
           <!-- 首次历史加载中：占位骨架，避免空白 -->
@@ -115,10 +115,22 @@
                 <a-avatar :src="aiAvatar" />
               </div>
               <div class="message-content">
-                <MarkdownRenderer
-                  v-if="message.content"
-                  :content="message.content"
-                />
+                <template v-if="message.content">
+                  <template
+                    v-for="(part, partIdx) in getMessageParts(message, index)"
+                    :key="partIdx"
+                  >
+                    <MarkdownRenderer
+                      v-if="part.type === 'text' && part.value.trim()"
+                      :content="part.value"
+                    />
+                    <ToolCallCard
+                      v-else-if="part.type === 'tool' && part.block"
+                      :block="part.block"
+                      @open="focusCodeTab"
+                    />
+                  </template>
+                </template>
                 <div v-if="message.loading" class="loading-indicator">
                   <a-spin size="small" />
                   <span>AI 正在思考...</span>
@@ -204,58 +216,102 @@
         </div>
       </div>
 
+      <!-- 左右分隔条：可拖拽调整宽度 -->
+      <div
+        class="main-resizer"
+        :class="{ dragging: isDraggingMain }"
+        @mousedown="onMainResizerDown"
+        @dblclick="resetMainSplit"
+        title="拖动调整宽度，双击恢复默认"
+      >
+        <div class="main-resizer-handle">
+          <ColumnWidthOutlined />
+        </div>
+      </div>
+
       <!-- 右侧网页展示区域 -->
       <div class="preview-section">
         <div class="preview-header">
-          <h3>生成后的网页展示</h3>
+          <div class="preview-tabs">
+            <button
+              class="preview-tab"
+              :class="{ active: rightPanel === 'preview' }"
+              @click="rightPanel = 'preview'"
+            >
+              <EyeOutlined />
+              <span>预览</span>
+            </button>
+            <button
+              class="preview-tab"
+              :class="{ active: rightPanel === 'code' }"
+              @click="rightPanel = 'code'"
+            >
+              <CodeOutlined />
+              <span>代码</span>
+              <span v-if="codeFiles.length > 0" class="tab-count">{{ codeFiles.length }}</span>
+            </button>
+          </div>
           <div class="preview-actions">
-            <a-button
-              v-if="previewUrl && !isEditMode"
-              type="primary"
-              ghost
-              @click="enterEditMode"
-            >
-              <template #icon>
-                <EditOutlined />
-              </template>
-              进入编辑模式
-            </a-button>
-            <a-button
-              v-if="isEditMode"
-              type="default"
-              danger
-              @click="exitEditMode"
-            >
-              <template #icon>
-                <CloseOutlined />
-              </template>
-              退出编辑模式
-            </a-button>
-            <a-button v-if="previewUrl" type="link" @click="openInNewTab">
-              <template #icon>
-                <ExportOutlined />
-              </template>
-              新窗口打开
-            </a-button>
+            <template v-if="rightPanel === 'preview'">
+              <a-button
+                v-if="previewUrl && !isEditMode"
+                type="primary"
+                ghost
+                @click="enterEditMode"
+              >
+                <template #icon>
+                  <EditOutlined />
+                </template>
+                进入编辑模式
+              </a-button>
+              <a-button
+                v-if="isEditMode"
+                type="default"
+                danger
+                @click="exitEditMode"
+              >
+                <template #icon>
+                  <CloseOutlined />
+                </template>
+                退出编辑模式
+              </a-button>
+              <a-button v-if="previewUrl" type="link" @click="openInNewTab">
+                <template #icon>
+                  <ExportOutlined />
+                </template>
+                新窗口打开
+              </a-button>
+            </template>
           </div>
         </div>
         <div class="preview-content">
-          <div v-if="!previewUrl && !isGenerating" class="preview-placeholder">
-            <div class="placeholder-icon">🌐</div>
-            <p>网站文件生成完成后将在这里展示</p>
+          <!-- 预览面板 -->
+          <div v-show="rightPanel === 'preview'" class="panel-pane">
+            <div v-if="!previewUrl && !isGenerating" class="preview-placeholder">
+              <div class="placeholder-icon">🌐</div>
+              <p>网站文件生成完成后将在这里展示</p>
+            </div>
+            <div v-else-if="isGenerating && !previewUrl" class="preview-loading">
+              <a-spin size="large" />
+              <p>正在生成网站...</p>
+            </div>
+            <iframe
+              v-else
+              ref="previewIframe"
+              :src="previewUrl"
+              class="preview-iframe"
+              frameborder="0"
+              @load="onIframeLoad"
+            ></iframe>
           </div>
-          <div v-else-if="isGenerating" class="preview-loading">
-            <a-spin size="large" />
-            <p>正在生成网站...</p>
+          <!-- 代码面板 -->
+          <div v-show="rightPanel === 'code'" class="panel-pane">
+            <CodeTabsPanel
+              :files="codeFiles"
+              :active-path="activeCodePath"
+              @select="activeCodePath = $event"
+            />
           </div>
-          <iframe
-            v-else
-            ref="previewIframe"
-            :src="previewUrl"
-            class="preview-iframe"
-            frameborder="0"
-            @load="onIframeLoad"
-          ></iframe>
         </div>
       </div>
     </div>
@@ -279,7 +335,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, onUnmounted, computed } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
@@ -299,10 +355,18 @@ import {
 import request from '@/request'
 
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import ToolCallCard from '@/components/ToolCallCard.vue'
+import CodeTabsPanel from '@/components/CodeTabsPanel.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import DeploySuccessModal from '@/components/DeploySuccessModal.vue'
 import aiAvatar from '@/assets/aiAvatar.png'
 import { API_BASE_URL, getStaticPreviewUrl } from '@/config/env'
+import {
+  parseAiMessage,
+  splitByToolCalls,
+  dedupeByFile,
+  type ToolCallBlock,
+} from '@/utils/parseToolCall'
 
 import {
   CloudUploadOutlined,
@@ -315,6 +379,9 @@ import {
   DownloadOutlined,
   EditOutlined,
   CloseOutlined,
+  EyeOutlined,
+  CodeOutlined,
+  ColumnWidthOutlined,
 } from '@ant-design/icons-vue'
 
 const route = useRoute()
@@ -349,6 +416,132 @@ const initialHistoryLoading = ref(true)
 const previewUrl = ref('')
 const previewReady = ref(false)
 const previewIframe = ref<HTMLIFrameElement>()
+
+// 左右两侧宽度比例：聊天区占百分比；默认 40%（与原来 flex: 2 / 3 比例近似）
+const DEFAULT_CHAT_WIDTH_PCT = 40
+const MIN_CHAT_WIDTH_PCT = 20
+const MAX_CHAT_WIDTH_PCT = 70
+const chatWidthPct = ref(DEFAULT_CHAT_WIDTH_PCT)
+const mainContentRef = ref<HTMLElement>()
+const isDraggingMain = ref(false)
+
+let mainDragStartX = 0
+let mainDragStartPct = 0
+let mainContainerWidth = 0
+
+function onMainResizerDown(e: MouseEvent) {
+  if (!mainContentRef.value) return
+  mainDragStartX = e.clientX
+  mainDragStartPct = chatWidthPct.value
+  mainContainerWidth = mainContentRef.value.clientWidth
+  isDraggingMain.value = true
+  document.addEventListener('mousemove', onMainResizerMove)
+  document.addEventListener('mouseup', onMainResizerUp)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  // 拖动时让 iframe 不抢鼠标事件
+  if (previewIframe.value) {
+    previewIframe.value.style.pointerEvents = 'none'
+  }
+}
+function onMainResizerMove(e: MouseEvent) {
+  if (!mainContainerWidth) return
+  const deltaPx = e.clientX - mainDragStartX
+  const deltaPct = (deltaPx / mainContainerWidth) * 100
+  const next = mainDragStartPct + deltaPct
+  chatWidthPct.value = Math.max(MIN_CHAT_WIDTH_PCT, Math.min(MAX_CHAT_WIDTH_PCT, next))
+}
+function onMainResizerUp() {
+  isDraggingMain.value = false
+  document.removeEventListener('mousemove', onMainResizerMove)
+  document.removeEventListener('mouseup', onMainResizerUp)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  if (previewIframe.value) {
+    previewIframe.value.style.pointerEvents = ''
+  }
+}
+function resetMainSplit() {
+  chatWidthPct.value = DEFAULT_CHAT_WIDTH_PCT
+}
+
+// 右侧面板：预览 / 代码 Tab
+const rightPanel = ref<'preview' | 'code'>('preview')
+// 当前选中代码文件路径
+const activeCodePath = ref<string | null>(null)
+
+// 缓存每条 AI 消息的解析结果，按消息对象引用缓存，避免 index 偏移失效
+interface ParsedCache {
+  rawLength: number
+  // 缓存键包含 codeGenType：切换模式时重新解析
+  mode: string
+  cleanedText: string
+  blocks: ToolCallBlock[]
+}
+const parsedCache = new WeakMap<Message, ParsedCache>()
+
+function getParsedForMessage(message: Message): ParsedCache {
+  const raw = message.content || ''
+  const mode = appInfo.value?.codeGenType || ''
+  const cached = parsedCache.get(message)
+  if (cached && cached.rawLength === raw.length && cached.mode === mode) {
+    return cached
+  }
+  const { cleanedText, toolCalls } = parseAiMessage(raw, mode)
+  const parsed: ParsedCache = {
+    rawLength: raw.length,
+    mode,
+    cleanedText,
+    blocks: toolCalls,
+  }
+  parsedCache.set(message, parsed)
+  return parsed
+}
+
+// 模板里调用：把消息切成 text / tool 片段
+function getMessageParts(message: Message, _index: number) {
+  const parsed = getParsedForMessage(message)
+  const segments = splitByToolCalls(parsed.cleanedText)
+  return segments.map((seg) => {
+    if (seg.type === 'text') return seg
+    const block = parsed.blocks.find((b) => b.id === seg.id)
+    return { type: 'tool' as const, id: seg.id, block }
+  })
+}
+
+// 所有 AI 消息中累积的代码文件，按文件路径去重保留最新版本
+const codeFiles = computed<ToolCallBlock[]>(() => {
+  const all: ToolCallBlock[] = []
+  messages.value.forEach((msg) => {
+    if (msg.type !== 'ai' || !msg.content) return
+    const parsed = getParsedForMessage(msg)
+    all.push(...parsed.blocks)
+  })
+  return dedupeByFile(all)
+})
+
+// 文件卡片点击：切到代码 Tab 并定位
+function focusCodeTab(filePath: string) {
+  rightPanel.value = 'code'
+  activeCodePath.value = filePath
+}
+
+// 当 codeFiles 变化且 activeCodePath 为空时，自动选第一个；
+// 若 activePath 对应文件已被删除（理论上不会），降级到第一个
+watch(
+  codeFiles,
+  (files) => {
+    if (files.length === 0) {
+      activeCodePath.value = null
+      return
+    }
+    const exists = files.some((f) => f.filePath === activeCodePath.value)
+    if (!activeCodePath.value || !exists) {
+      activeCodePath.value = files[files.length - 1].filePath
+    }
+  },
+  { immediate: true },
+)
 
 // 可视化编辑相关
 const isEditMode = ref(false)
@@ -947,6 +1140,11 @@ onMounted(() => {
 onUnmounted(() => {
   // 移除消息监听器
   window.removeEventListener('message', handleIframeMessage)
+  // 防止组件卸载时仍残留拖拽监听
+  document.removeEventListener('mousemove', onMainResizerMove)
+  document.removeEventListener('mouseup', onMainResizerUp)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
   // EventSource 会在组件卸载时自动清理
 })
 </script>
@@ -1084,14 +1282,14 @@ onUnmounted(() => {
 .main-content {
   flex: 1;
   display: flex;
-  gap: 16px;
+  gap: 0;
   padding: 0;
   overflow: hidden;
 }
 
 /* 左侧对话区域 */
 .chat-section {
-  flex: 2;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: rgba(255, 255, 255, 0.94);
@@ -1099,6 +1297,7 @@ onUnmounted(() => {
   border-radius: 20px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
   overflow: hidden;
+  min-width: 280px;
 }
 
 .messages-container {
@@ -1249,7 +1448,8 @@ onUnmounted(() => {
 
 /* 右侧预览区域 */
 .preview-section {
-  flex: 3;
+  flex: 1;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
   background: rgba(255, 255, 255, 0.94);
@@ -1259,13 +1459,79 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+/* 左右分隔条 */
+.main-resizer {
+  flex-shrink: 0;
+  width: 16px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  user-select: none;
+}
+
+.main-resizer::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.0);
+  transition: background 0.15s;
+}
+
+.main-resizer:hover::before,
+.main-resizer.dragging::before {
+  background: rgba(37, 99, 235, 0.35);
+}
+
+.main-resizer-handle {
+  width: 22px;
+  height: 36px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 14px;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.15s, transform 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
+  z-index: 2;
+}
+
+.main-resizer:hover .main-resizer-handle,
+.main-resizer.dragging .main-resizer-handle {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.main-resizer:hover .main-resizer-handle {
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+.main-resizer.dragging .main-resizer-handle {
+  color: #ffffff;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
 .preview-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 20px;
+  padding: 10px 16px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(248, 251, 255, 0.92);
+  gap: 12px;
 }
 
 .preview-header h3 {
@@ -1273,6 +1539,53 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: #0f172a;
+}
+
+.preview-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 10px;
+}
+
+.preview-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.preview-tab:hover {
+  color: #0f172a;
+}
+
+.preview-tab.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  border-radius: 9px;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
 }
 
 .preview-actions {
@@ -1284,6 +1597,13 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   overflow: hidden;
+}
+
+.panel-pane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .preview-placeholder {
@@ -1344,7 +1664,13 @@ onUnmounted(() => {
   .chat-section,
   .preview-section {
     flex: none;
+    width: auto !important;
     height: 50vh;
+    min-width: 0;
+  }
+
+  .main-resizer {
+    display: none;
   }
 }
 
