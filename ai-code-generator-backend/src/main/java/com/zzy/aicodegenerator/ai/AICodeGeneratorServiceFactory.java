@@ -29,20 +29,15 @@ import java.time.Duration;
 @Configuration
 public class AICodeGeneratorServiceFactory {
 
-    @Resource
+    @Resource(name = "openAiChatModel")
     private ChatModel chatModel;
-
-    @Resource
-    private StreamingChatModel openAiStreamingChatModel;
-
-    @Resource
-    private StreamingChatModel reasoningStreamingChatModel;
 
     @Resource
     private RedisChatMemoryStore redisChatMemoryStore;
 
     @Resource
     private ChatHistoryService chatHistoryService;
+
     /**
      * AI 服务缓存
      * 缓存策略：缓存 1000 个实例，每个实例缓存 30 分钟，每次访问 10 分钟后过期
@@ -114,9 +109,9 @@ public class AICodeGeneratorServiceFactory {
         return switch (codeGenType) {
             // 生成 HTML、多文件代码，使用流式对话模型
             case HTML, MULTI_FILE -> {
-                //
-                StreamingChatModel  streamingChatModel = SpringContextUtil.getBean("streamingChatModelPrototype", StreamingChatModel.class);
-                yield   AiServices.builder(AICodeGeneratorService.class)
+                // 使用多例模式的 StreamingChatModel 解决并发问题
+                StreamingChatModel streamingChatModel = SpringContextUtil.getBean("streamingChatModelPrototype", StreamingChatModel.class);
+                yield AiServices.builder(AICodeGeneratorService.class)
                         .chatModel(chatModel)
                         .chatMemory(chatMemory)
                         .streamingChatModel(streamingChatModel)
@@ -124,8 +119,9 @@ public class AICodeGeneratorServiceFactory {
             }
             // 生成 Vue 项目，使用工具调用和推理模型
             case VUE_PROJECT -> {
-                StreamingChatModel  reasoningStreamingChatModel = SpringContextUtil.getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
-                yield  AiServices.builder(AICodeGeneratorService.class)
+                // 使用多例模式的 StreamingChatModel 解决并发问题
+                StreamingChatModel reasoningStreamingChatModel = SpringContextUtil.getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
+                yield AiServices.builder(AICodeGeneratorService.class)
                         .chatModel(chatModel)
                         .streamingChatModel(reasoningStreamingChatModel)
                         .chatMemoryProvider(memoryId -> chatMemory)
