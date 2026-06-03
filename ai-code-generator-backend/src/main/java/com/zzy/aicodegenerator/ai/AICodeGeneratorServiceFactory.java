@@ -2,6 +2,7 @@ package com.zzy.aicodegenerator.ai;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.zzy.aicodegenerator.ai.guardrail.PromptSafetyInputGuardrail;
 import com.zzy.aicodegenerator.ai.tools.*;
 import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
 import com.zzy.aicodegenerator.service.ChatHistoryService;
@@ -115,6 +116,8 @@ public class AICodeGeneratorServiceFactory {
                         .chatModel(chatModel)
                         .chatMemory(chatMemory)
                         .streamingChatModel(streamingChatModel)
+                        .inputGuardrails(new PromptSafetyInputGuardrail()) // 对用户输入进行安全检查
+//                        .outputGuardrails(new RetryOutputGuardrail())   // 对模型输出进行检查
                         .build();
             }
             // 生成 Vue 项目，使用工具调用和推理模型
@@ -134,6 +137,8 @@ public class AICodeGeneratorServiceFactory {
                         .hallucinatedToolNameStrategy(
                                 toolExecutionRequest -> ToolExecutionResultMessage.from(toolExecutionRequest,
                                         "Error: there is not tool called" + toolExecutionRequest.name()))
+                        .inputGuardrails(new PromptSafetyInputGuardrail()) // 对用户输入进行安全检查
+//                        .outputGuardrails(new RetryOutputGuardrail())   // 对模型输出进行检查
                         .build();
             }
             default -> throw new IllegalArgumentException("不支持的代码生成类型：" + codeGenType);

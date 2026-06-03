@@ -4,11 +4,13 @@ import com.zzy.aicodegenerator.exception.ErrorCode;
 import lombok.Data;
 
 import java.io.Serializable;
+
 /**
  * 通用的API响应类，包含错误码、数据和错误信息
  * @param <T> 数据类型
  */
 @Data
+//@NoArgsConstructor
 public class BaseResponse<T> implements Serializable {
     private int code;
 

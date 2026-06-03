@@ -5,6 +5,7 @@ import cn.hutool.json.JSONUtil;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.zzy.aicodegenerator.annotation.AuthCheck;
+import com.zzy.aicodegenerator.annotation.RateLimit;
 import com.zzy.aicodegenerator.common.BaseResponse;
 import com.zzy.aicodegenerator.common.DeleteRequest;
 import com.zzy.aicodegenerator.common.ResultUtils;
@@ -16,6 +17,7 @@ import com.zzy.aicodegenerator.exception.ThrowUtils;
 import com.zzy.aicodegenerator.model.dto.app.*;
 import com.zzy.aicodegenerator.model.entity.App;
 import com.zzy.aicodegenerator.model.entity.User;
+import com.zzy.aicodegenerator.model.enums.RateLimitType;
 import com.zzy.aicodegenerator.model.vo.AppVO;
 import com.zzy.aicodegenerator.service.AppService;
 import com.zzy.aicodegenerator.service.ProjectDownloadService;
@@ -24,6 +26,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.BeanUtils;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
@@ -61,6 +64,7 @@ public class AppController {
      * @param request HTTP 请求
      * @return 生成的代码
      */
+    @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "AI 对话请求，请稍候再试")
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId, @RequestParam String message, HttpServletRequest request) {
         // 参数校验
@@ -258,6 +262,11 @@ public class AppController {
      * @return 应用分页列表（脱敏）
      */
     @PostMapping("/list/featured/page/vo")
+    @Cacheable(
+            value = "featured_app_page",
+            key = "T(com.zzy.aicodegenerator.utils.CacheKeyUtils).generateKey(#appQueryRequest)",
+            condition = "#appQueryRequest.pageNum <= 10"
+    )
     public BaseResponse<Page<AppVO>> listFeaturedAppsVOByPage(@RequestBody AppQueryRequest appQueryRequest) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR, "请求参数错误");
         int pageSize = appQueryRequest.getPageSize();

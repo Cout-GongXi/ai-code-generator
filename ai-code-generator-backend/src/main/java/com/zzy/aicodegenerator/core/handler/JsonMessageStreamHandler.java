@@ -6,8 +6,6 @@ import cn.hutool.json.JSONUtil;
 import com.zzy.aicodegenerator.ai.model.message.*;
 import com.zzy.aicodegenerator.ai.tools.BaseTool;
 import com.zzy.aicodegenerator.ai.tools.ToolManager;
-import com.zzy.aicodegenerator.constant.AppConstant;
-import com.zzy.aicodegenerator.core.builder.VueProjectBuilder;
 import com.zzy.aicodegenerator.model.entity.User;
 import com.zzy.aicodegenerator.model.enums.ChatHistoryMessageTypeEnum;
 import com.zzy.aicodegenerator.service.ChatHistoryService;
@@ -16,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
-import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -29,9 +26,6 @@ import java.util.Set;
 @Slf4j
 @Component
 public class JsonMessageStreamHandler {
-
-    @Resource
-    private VueProjectBuilder vueProjectBuilder;
 
     @Resource
     private ToolManager toolManager;
@@ -60,8 +54,6 @@ public class JsonMessageStreamHandler {
                     // 流式响应完成后，添加 AI 消息到对话历史
                     String aiResponse = chatHistoryStringBuilder.toString();
                     chatHistoryService.addChatMessage(appId, loginUser.getId(), aiResponse, ChatHistoryMessageTypeEnum.AI.getValue());
-                    String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + "vue_project_" + appId;
-                    vueProjectBuilder.buildProjectAsync(projectPath);
                 }).doOnError(error -> {
                     // 流式响应出错时，添加错误消息到对话历史
                     String errMessage = "AI 响应错误： " + error.getMessage();
