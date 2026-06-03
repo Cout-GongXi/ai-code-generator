@@ -55,3 +55,6 @@ minio:
   secretKey: 123456
   # 预设一个默认的存储桶（桶名称不能包含大写字母和下划线，只能小写字母、数字和连字符）
   bucketName: ai-code-generator
+
+pexels:
+  api-key: your-pexels-api-key-here

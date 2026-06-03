@@ -73,7 +73,7 @@ public class AICodeGeneratorFacade {
      * @param appId           应用ID
      * @return 生成的代码字符串
      */
-    public Flux<String> generateAndSaveCodeSteam(String userMessage, CodeGenTypeEnum codeGenTypeEnum, Long appId) {
+    public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenTypeEnum, Long appId) {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "代码生成类型不能为空");
         }

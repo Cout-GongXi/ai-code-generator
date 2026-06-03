@@ -46,7 +46,7 @@ create table if not exists app
 create table if not exists chat_history
 (
     id          bigint auto_increment comment 'id' primary key,
-    message     text                               not null comment '消息内容',
+    message     MEDIUMTEXT                               not null comment '消息内容',
     messageType varchar(32)                        not null comment 'user/ai',
     appId       bigint                             not null comment '应用 id',
     userId      bigint                             not null comment '创建用户 id',

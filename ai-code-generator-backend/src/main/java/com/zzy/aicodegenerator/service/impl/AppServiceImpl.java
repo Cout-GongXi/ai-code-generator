@@ -97,7 +97,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         chatHistoryService.addChatMessage(appId, loginUser.getId(), message, ChatHistoryMessageTypeEnum.USER.getValue());
 
         // 6. 调用 AI 进行生成
-        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeSteam(message, enumGenTypeEnum, appId);
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, enumGenTypeEnum, appId);
 
         // 7. 收集 AI 生成的消息，保存到数据库中
         return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, enumGenTypeEnum);

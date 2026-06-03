@@ -2,9 +2,10 @@ package com.zzy.aicodegenerator.ai;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.zzy.aicodegenerator.ai.tools.FileWriteTool;
+import com.zzy.aicodegenerator.ai.tools.*;
 import com.zzy.aicodegenerator.model.enums.CodeGenTypeEnum;
 import com.zzy.aicodegenerator.service.ChatHistoryService;
+import com.zzy.aicodegenerator.utils.SpringContextUtil;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -112,21 +113,33 @@ public class AICodeGeneratorServiceFactory {
         chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
         return switch (codeGenType) {
             // 生成 HTML、多文件代码，使用流式对话模型
-            case HTML, MULTI_FILE -> AiServices.builder(AICodeGeneratorService.class)
-                    .chatModel(chatModel)
-                    .chatMemory(chatMemory)
-                    .streamingChatModel(openAiStreamingChatModel)
-                    .build();
+            case HTML, MULTI_FILE -> {
+                //
+                StreamingChatModel  streamingChatModel = SpringContextUtil.getBean("streamingChatModelPrototype", StreamingChatModel.class);
+                yield   AiServices.builder(AICodeGeneratorService.class)
+                        .chatModel(chatModel)
+                        .chatMemory(chatMemory)
+                        .streamingChatModel(streamingChatModel)
+                        .build();
+            }
             // 生成 Vue 项目，使用工具调用和推理模型
-            case VUE_PROJECT -> AiServices.builder(AICodeGeneratorService.class)
-                    .chatModel(chatModel)
-                    .streamingChatModel(reasoningStreamingChatModel)
-                    .chatMemoryProvider(memoryId -> chatMemory)
-                    .tools(new FileWriteTool())
-                    .hallucinatedToolNameStrategy(
-                            toolExecutionRequest -> ToolExecutionResultMessage.from(toolExecutionRequest,
-                                    "Error: there is not tool called" + toolExecutionRequest.name()))
-                    .build();
+            case VUE_PROJECT -> {
+                StreamingChatModel  reasoningStreamingChatModel = SpringContextUtil.getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
+                yield  AiServices.builder(AICodeGeneratorService.class)
+                        .chatModel(chatModel)
+                        .streamingChatModel(reasoningStreamingChatModel)
+                        .chatMemoryProvider(memoryId -> chatMemory)
+                        .tools(
+                                new FileWriteTool(),
+                                new FileReadTool(),
+                                new FileModifyTool(),
+                                new FileDirReadTool(),
+                                new FileDeleteTool())
+                        .hallucinatedToolNameStrategy(
+                                toolExecutionRequest -> ToolExecutionResultMessage.from(toolExecutionRequest,
+                                        "Error: there is not tool called" + toolExecutionRequest.name()))
+                        .build();
+            }
             default -> throw new IllegalArgumentException("不支持的代码生成类型：" + codeGenType);
         };
     }
